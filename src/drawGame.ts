@@ -1,5 +1,14 @@
 import p5 from "p5";
-import {GameState, LongBoardPiece, PieceType} from "./gamelogic";
+import {
+    Card,
+    CardAction,
+    Direction,
+    GameState,
+    LongBoardPiece,
+    PieceType,
+    SelectObjectType,
+    SelectPieceType
+} from "./gamelogic";
 
 function drawScoreboard(p: p5, game: GameState) {
     let scoreBoardX = p.width - 100;
@@ -56,6 +65,8 @@ function drawBoard(p: p5, game: GameState) {
     let displayBoardHeight = displayBoardWidth / game.boardWidth * game.boardHeight;
     let tileWidth = displayBoardWidth / game.boardWidth;
     let tileHeight = displayBoardHeight / game.boardHeight;
+
+    p.push();
 
     // tiles
     for (let y = 0; y < game.boardHeight; y++) {
@@ -149,9 +160,117 @@ function drawBoard(p: p5, game: GameState) {
     }
 
     p.noStroke();
+    p.pop();
 }
 
-function drawHand(p: p5, game: GameState) {}
+function getCardDimensions(p: p5) {
+    let cardWidth = p.width / 8;
+    let cardHeight = cardWidth * 1.5;
+    return [cardWidth, cardHeight];
+}
+const CARD_COLORS = new Map<CardAction, string>([
+    [CardAction.Move, "#44BC66"],
+
+    [CardAction.Grow, "#4466FF"],
+    [CardAction.Shrink, "#4466FF"],
+
+    [CardAction.Remove, "#FF4466"],
+    [CardAction.Place, "#FF4466"],
+
+    [CardAction.Unmask, "#AA9966"],
+    [CardAction.Mask, "#AA9966"],
+]);
+
+function getCardActionWord(action: CardAction | undefined) {
+    if (!action) return "???";
+    return action.toString().toUpperCase();
+}
+function getTargetWord(target: SelectPieceType | SelectObjectType | undefined) {
+    if (!target) return "???";
+    return target.toString().toUpperCase();
+}
+
+function getPieceWord(pieceType: PieceType | undefined) {
+    if (!pieceType) return "???";
+    return pieceType.toString().toUpperCase();
+}
+
+function getDirWord(dir: Direction | undefined) {
+    if (!dir) return "???";
+    return dir.toString().toUpperCase();
+}
+
+function drawCard(p: p5, card: Card) {
+    let [cardWidth, cardHeight] = getCardDimensions(p);
+    let roundedness = cardWidth / 6;
+    let mouse = p.screenToWorld(p.mouseX, p.mouseY);
+    let cardColor = CARD_COLORS.get(card.action.getKnownData()) || "#FF00FF";
+    p.strokeWeight(3)
+    p.stroke(cardColor);
+    p.fill(222);
+    if (mouse.x > 0 && mouse.x < cardWidth && mouse.y > 0 && mouse.y < cardHeight) {
+       // hovered
+        p.rotate(p.radians(-5));
+        p.scale(1.1);
+        p.rect(0, 0, cardWidth, cardHeight, roundedness);
+    } else {
+        p.rect(0, 0, cardWidth, cardHeight, roundedness);
+    }
+
+    let numCardSegments = 4;
+    if (card.actionTarget.targetType.getKnownData() in [SelectPieceType.All, SelectPieceType.Target]) {
+        numCardSegments++;
+    }
+    if (card.x) {
+        numCardSegments++;
+    }
+    if(card.dir) {
+        numCardSegments++;
+    }
+
+    let segment = 1;
+    let actionWord = getCardActionWord(card.action.getKnownData());
+    p.textAlign(p.CENTER, p.CENTER);
+    p.textSize(cardWidth / 8);
+    p.fill(cardColor);
+    p.stroke(cardColor);
+    p.strokeWeight(1);
+    p.text(actionWord, cardWidth / 2, cardHeight * segment / numCardSegments);
+
+    segment++;
+    let knownActionTarget = card.actionTarget.targetType.getKnownData();
+    let targetWord = getTargetWord(knownActionTarget);
+    p.text(targetWord, cardWidth / 2, cardHeight * segment / numCardSegments);
+
+    if (knownActionTarget == SelectPieceType.All || knownActionTarget == SelectPieceType.Target) {
+        segment++;
+        let knownTargetPieceType = card.actionTarget.pieceType.getKnownData();
+        let targetPieceWord = getPieceWord(knownTargetPieceType);
+        p.text(targetPieceWord, cardWidth / 2, cardHeight * segment / numCardSegments);
+    }
+    if (card.x) {
+        segment++;
+        p.text(card.x.getKnownData() || "?", cardWidth / 2, cardHeight * segment / numCardSegments);
+    }
+    if (card.dir) {
+        segment++;
+        p.text(getDirWord(card.dir.getKnownData()), cardWidth / 2, cardHeight * segment / numCardSegments);
+    }
+}
+
+function drawHand(p: p5, game: GameState) {
+    let [cardWidth, cardHeight] = getCardDimensions(p);
+    let currentPlayer = game.players.find(p => p.id === game.currentPlayerId)!;
+    p.push();
+    for (let card of currentPlayer.hand) {
+        p.translate(-cardWidth - 5, 0);
+        p.push();
+        p.translate(p.width / 2 + currentPlayer.hand.length * cardWidth / 2, p.height - cardHeight);
+        drawCard(p, card);
+        p.pop();
+    }
+    p.pop();
+}
 
 export function drawGame(p: p5) {
     p.background(255);

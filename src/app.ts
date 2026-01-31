@@ -4,8 +4,9 @@ import {GameState, Player} from './gamelogic';
 window.onload = () => {
     let localGame = localStorage.getItem("game");
     if (localGame) {
-        let game: GameState = Object.assign(new GameState(), JSON.parse(localGame));
         if (window.confirm("Found saved local game, continue?")) {
+            let game = new GameState();
+            game.loadFromSave(localGame)
             console.log("loaded local game", game);
             window.game = game;
         } else {
@@ -36,10 +37,11 @@ export function startPassAndPlayGame(numPlayers: number) {
     }
     game.setupBoard(8, 8);
     game.generateDeck();
+    game.shuffleDeck();
     game.dealCards();
+    game.currentPlayerId = game.players[0].id;
 
     window.game = game;
-    let gameJson = JSON.stringify(game);
-    localStorage.setItem("game", gameJson);
+    localStorage.setItem("game", game.saveToJson());
     // localStorage.setItem("crush", JSONCrush.crush(gameJson))
 }

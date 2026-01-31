@@ -11,7 +11,7 @@ export enum PieceType {
     Shoot = 'shoot',
     Bomb = 'bomb',
     Coin = 'coin',
-    Any = 'any'
+    Anything = 'things'
 }
 
 export enum SelectPieceType {
@@ -56,12 +56,19 @@ function selectRandom<T>(rng: seedrandom.PRNG, list: T[]) {
     return list[i];
 }
 
-export class MaskedData<T> {
-    options: T[];
+interface MaskedDataProps<T> {
     index: number;
+    options: T[];
     isMasked: boolean;
     isMystery: boolean;
-    constructor(options: T[], index: number | T, isMasked = false, isMystery = false) {
+}
+export class MaskedData<T> implements MaskedDataProps<T> {
+    index: number;
+    options: T[];
+    isMasked: boolean;
+    isMystery: boolean;
+    // constructor(options: T[], index: number | T, isMasked = false, isMystery = false) {
+    constructor({options, index, isMasked = false, isMystery = false}: {options: T[], index: number | T, isMasked?: boolean, isMystery?: boolean}) {
         this.options = options;
         if (typeof index === 'number') {
             this.index = index;
@@ -78,6 +85,11 @@ export class MaskedData<T> {
         }
     }
 
+    getKnownData() {
+        if (this.isMasked) return undefined;
+        if (this.isMystery) return undefined;
+        return this.options[this.index];
+    }
     revealData(rng: seedrandom.PRNG) {
         if (this.isMystery) {
             return selectRandom(rng, this.options);
@@ -103,45 +115,12 @@ export class ActionTarget {
     }
 }
 
-export class Card {
+export interface Card {
     id: string;
     action: MaskedData<CardAction>;
     actionTarget: ActionTarget;
-    constructor(id: string, action: MaskedData<CardAction>, actionTarget: ActionTarget) {
-        this.id = id;
-        this.action = action;
-        this.actionTarget = actionTarget;
-    }
-}
-export class MoveCard extends Card {
-    // MOVE <SELECT_PIECE> <X> <DIR>
-    x: MaskedData<number>;
-    dir: MaskedData<Direction>;
-    constructor(id: string, actionTarget: ActionTarget, x: MaskedData<number>, dir: MaskedData<Direction>) {
-        super(id, new MaskedData(Object.values(CardAction), CardAction.Move), actionTarget);
-    }
-}
-export class ResizeCard extends Card {
-    // GROW/SHRINK LADDER/SHOOT
-    constructor(id: string, action: CardAction.Grow | CardAction.Shrink, actionTarget: ActionTarget) {
-        super(id, new MaskedData(Object.values(CardAction), action), actionTarget);
-    }
-}
-export class PlacementCard extends Card {
-    // REMOVE/PLACE <SELECT_PIECE> <X> <DIR>
-    x: MaskedData<number>;
-    dir: MaskedData<Direction>;
-    constructor(id: string, action: CardAction.Remove | CardAction.Place, actionTarget: ActionTarget, x: MaskedData<number>, dir: MaskedData<Direction>) {
-        super(id, new MaskedData(Object.values(CardAction), action), actionTarget);
-        this.x = x;
-        this.dir = dir;
-    }
-}
-export class MaskUnmaskCard extends Card {
-    // (UN)MASK <SELECT_OBJ>
-    constructor(id: string, action: CardAction.Mask | CardAction.Unmask, actionTarget: ActionTarget) {
-        super(id, new MaskedData(Object.values(CardAction), action), actionTarget);
-    }
+    x?: MaskedData<number>;
+    dir?: MaskedData<Direction>;
 }
 
 export interface Player {
@@ -167,27 +146,28 @@ export interface LongBoardPiece extends BoardPiece {
 }
 
 function generateCard(id: string, rng: seedrandom.PRNG, action: CardAction) {
+    let maskedAction = new MaskedData({options: Object.values(CardAction), index: action});
     let actionTarget = new ActionTarget(
-        new MaskedData(Object.values(SelectPieceType), Math.floor(rng() * Object.values(SelectPieceType).length)),
-        new MaskedData(Object.values(PieceType), Math.floor(rng() * Object.values(PieceType).length)),
+        new MaskedData({options: Object.values(SelectPieceType), index:Math.floor(rng() * Object.values(SelectPieceType).length)}),
+        new MaskedData({options: Object.values(PieceType), index: Math.floor(rng() * Object.values(PieceType).length)}),
     );
-    let dir = new MaskedData(Object.values(Direction), Math.floor(rng() * Object.values(Direction).length));
-    let options = [-3, -2, -1, 0, 1, 2, 3];
-    let x = new MaskedData(options, Math.floor(rng() * options.length));
+    let options = [0, 1, 2, 3];
+    let x = new MaskedData({options, index: Math.floor(rng() * options.length)});
+    let dir = new MaskedData({options: Object.values(Direction), index: Math.floor(rng() * Object.values(Direction).length)});
 
-    if (action === CardAction.Move) {
-        return new MoveCard(id, actionTarget, x, dir);
-    } else if (action === CardAction.Grow || action === CardAction.Shrink) {
+    if (action === CardAction.Grow || action === CardAction.Shrink) {
         actionTarget = new ActionTarget(
-            new MaskedData([SelectPieceType.Target], 0),
-            new MaskedData([PieceType.Ladder, PieceType.Shoot], Math.floor(rng() * 2))
+            new MaskedData({options: [SelectPieceType.Target], index: 0}),
+            new MaskedData({options: [PieceType.Ladder, PieceType.Shoot], index: Math.floor(rng() * 2)})
         );
-        return new ResizeCard(id, action, actionTarget);
-    } else if (action === CardAction.Place || action === CardAction.Remove) {
-        return new PlacementCard(id, action, actionTarget, x, dir);
-    } else if (action === CardAction.Mask || action === CardAction.Unmask) {
-        return new MaskUnmaskCard(id, action, actionTarget);
+        x = undefined;
+        dir = undefined;
     }
+    if (action === CardAction.Unmask || action === CardAction.Mask) {
+        x = undefined;
+        dir = undefined;
+    }
+    return {id, action: maskedAction, actionTarget, x, dir} as Card;
 }
 
 export enum GameActionType {
@@ -208,7 +188,7 @@ export interface GameAction {
 }
 
 export class GameState {
-    rng: seedrandom.PRNG
+    rng: seedrandom.StatefulPRNG<seedrandom.State.Arc4>;
     nextId: number;
     boardWidth: number;
     boardHeight: number;
@@ -216,13 +196,50 @@ export class GameState {
     deck: Card[];
     pieces: BoardPiece[];
     leger: GameAction[];
+    currentPlayerId: string;
     constructor(seed?: string) {
-        this.rng = seedrandom(seed);
+        this.rng = seedrandom(seed, {state: true});
         this.nextId = 0;
         this.players = [];
         this.deck = [];
         this.pieces = [];
         this.leger = [];
+        this.currentPlayerId = '';
+    }
+
+    saveToJson() {
+        let obj = {
+            rngState: this.rng.state(),
+            ...this
+        };
+        return JSON.stringify(obj);
+    }
+
+    loadFromSave(saveJson: string) {
+        let obj = JSON.parse(saveJson);
+        this.rng = seedrandom("", {state: obj.rngState});
+        this.nextId = obj.nextId;
+        this.boardWidth = obj.boardWidth;
+        this.boardHeight = obj.boardHeight;
+        this.players = obj.players;
+        this.deck = obj.deck;
+        this.pieces = obj.pieces;
+        this.leger = obj.leger;
+        this.currentPlayerId = obj.currentPlayerId;
+
+        let fixCardMaskedDataObjects = (card: Card) => {
+            card.action = new MaskedData<CardAction>(card.action)
+            card.actionTarget.targetType = new MaskedData<SelectPieceType|SelectObjectType>(card.actionTarget.targetType);
+            card.actionTarget.pieceType = new MaskedData<PieceType>(card.actionTarget.pieceType);
+            if (card.x) card.x = new MaskedData<number>(card.x);
+            if (card.dir) card.dir = new MaskedData<Direction>(card.dir);
+        }
+        this.deck.forEach(fixCardMaskedDataObjects);
+        this.players
+            .map(p => p.hand)
+            .forEach(hand =>
+                hand.forEach(fixCardMaskedDataObjects)
+            );
     }
 
     getNextId() {
@@ -278,6 +295,10 @@ export class GameState {
         for (let i = 0; i < 4; i++) {
             // TODO
         }
+    }
+
+    shuffleDeck() {
+        this.deck.sort(() => 0.5 - this.rng());
     }
 
     dealCards() {
