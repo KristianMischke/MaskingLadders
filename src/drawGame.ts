@@ -209,7 +209,7 @@ function drawCard(p: p5, card: Card) {
     p.stroke(cardColor);
     p.fill(222);
     if (mouse.x > 0 && mouse.x < cardWidth && mouse.y > 0 && mouse.y < cardHeight) {
-       // hovered
+        // hovered
         p.rotate(p.radians(-5));
         p.scale(1.1);
         p.rect(0, 0, cardWidth, cardHeight, roundedness);
@@ -218,15 +218,12 @@ function drawCard(p: p5, card: Card) {
     }
 
     let numCardSegments = 4;
+    if (card.placePieceType) numCardSegments++;
     if (card.actionTarget.targetType.getKnownData() in [SelectPieceType.All, SelectPieceType.Target]) {
         numCardSegments++;
     }
-    if (card.x) {
-        numCardSegments++;
-    }
-    if(card.dir) {
-        numCardSegments++;
-    }
+    if (card.x) numCardSegments++;
+    if (card.dir) numCardSegments++;
 
     let segment = 1;
     let actionWord = getCardActionWord(card.action.getKnownData());
@@ -236,6 +233,11 @@ function drawCard(p: p5, card: Card) {
     p.stroke(cardColor);
     p.strokeWeight(1);
     p.text(actionWord, cardWidth / 2, cardHeight * segment / numCardSegments);
+
+    if (card.placePieceType) {
+        segment++;
+        p.text(getPieceWord(card.placePieceType?.getKnownData()), cardWidth / 2, cardHeight * segment / numCardSegments);
+    }
 
     segment++;
     let knownActionTarget = card.actionTarget.targetType.getKnownData();
@@ -258,17 +260,82 @@ function drawCard(p: p5, card: Card) {
     }
 }
 
+function drawDie(p: p5) {
+    let [cardWidth, cardHeight] = getCardDimensions(p);
+    let dieSize = cardWidth / 2;
+    let mouse = p.screenToWorld(p.mouseX, p.mouseY);
+    let hover = false;
+    if (mouse.x > -dieSize/2 && mouse.x < dieSize/2 && mouse.y > -dieSize/2 && mouse.y < dieSize/2) {
+        p.rotate(p.radians(-10));
+        hover = true;
+    }
+
+    let roundedness = cardWidth / 6;
+    p.fill(255);
+    p.stroke(0);
+    p.strokeWeight(3);
+    p.rectMode(p.CENTER);
+    p.rect(0, 0, dieSize, dieSize, roundedness);
+
+    let dieState = 5;
+    let dotSize = dieSize/8;
+    p.fill(0);
+    switch (dieState) {
+        case 1:
+            p.circle(0, 0, dotSize);
+            break;
+        case 2:
+            p.circle(-dotSize*2, -dotSize*2, dotSize);
+            p.circle(dotSize*2, dotSize*2, dotSize);
+            break;
+        case 3:
+            p.circle(-dotSize*3, -dotSize*3, dotSize);
+            p.circle(0, 0, dotSize);
+            p.circle(dotSize*3, dotSize*3, dotSize);
+            break;
+        case 4:
+            p.circle(-dotSize*2, -dotSize*2, dotSize);
+            p.circle(dotSize*2, dotSize*2, dotSize);
+            p.circle(-dotSize*2, dotSize*2, dotSize);
+            p.circle(dotSize*2, -dotSize*2, dotSize);
+            break;
+        case 5:
+            p.circle(-dotSize*2, -dotSize*2, dotSize);
+            p.circle(dotSize*2, dotSize*2, dotSize);
+            p.circle(-dotSize*2, dotSize*2, dotSize);
+            p.circle(dotSize*2, -dotSize*2, dotSize);
+            p.circle(0, 0, dotSize);
+            break;
+        case 6:
+            p.circle(-dotSize*2, -dotSize*3, dotSize);
+            p.circle(dotSize*2, -dotSize*3, dotSize);
+            p.circle(-dotSize*2, 0, dotSize);
+            p.circle(-dotSize*2, 0, dotSize);
+            p.circle(dotSize*2, dotSize*3, dotSize);
+            p.circle(dotSize*2, dotSize*3, dotSize);
+            break;
+    }
+}
+
 function drawHand(p: p5, game: GameState) {
     let [cardWidth, cardHeight] = getCardDimensions(p);
     let currentPlayer = game.players.find(p => p.id === game.currentPlayerId)!;
     p.push();
+    p.translate(p.width / 2 + currentPlayer.hand.length * cardWidth / 2, p.height - cardHeight);
     for (let card of currentPlayer.hand) {
         p.translate(-cardWidth - 5, 0);
+
         p.push();
-        p.translate(p.width / 2 + currentPlayer.hand.length * cardWidth / 2, p.height - cardHeight);
         drawCard(p, card);
         p.pop();
     }
+
+    let dieSize = cardWidth / 2;
+    p.translate(-dieSize/2 - 5, cardHeight / 2);
+    p.push();
+    drawDie(p);
+    p.pop();
+
     p.pop();
 }
 

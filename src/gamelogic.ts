@@ -119,6 +119,7 @@ export interface Card {
     id: string;
     action: MaskedData<CardAction>;
     actionTarget: ActionTarget;
+    placePieceType?: MaskedData<PieceType>;
     x?: MaskedData<number>;
     dir?: MaskedData<Direction>;
 }
@@ -151,10 +152,14 @@ function generateCard(id: string, rng: seedrandom.PRNG, action: CardAction) {
         new MaskedData({options: Object.values(SelectPieceType), index:Math.floor(rng() * Object.values(SelectPieceType).length)}),
         new MaskedData({options: Object.values(PieceType), index: Math.floor(rng() * Object.values(PieceType).length)}),
     );
-    let options = [0, 1, 2, 3];
+    let options = [1, 2, 3];
     let x = new MaskedData({options, index: Math.floor(rng() * options.length)});
     let dir = new MaskedData({options: Object.values(Direction), index: Math.floor(rng() * Object.values(Direction).length)});
+    let placePieceType = undefined;
 
+    if (action === CardAction.Place || action === CardAction.Remove) {
+        placePieceType = new MaskedData({options: Object.values(PieceType), index: Math.floor(rng() * Object.values(PieceType).length)});
+    }
     if (action === CardAction.Grow || action === CardAction.Shrink) {
         actionTarget = new ActionTarget(
             new MaskedData({options: [SelectPieceType.Target], index: 0}),
@@ -167,7 +172,7 @@ function generateCard(id: string, rng: seedrandom.PRNG, action: CardAction) {
         x = undefined;
         dir = undefined;
     }
-    return {id, action: maskedAction, actionTarget, x, dir} as Card;
+    return {id, action: maskedAction, actionTarget, x, dir, placePieceType} as Card;
 }
 
 export enum GameActionType {
@@ -233,6 +238,7 @@ export class GameState {
             card.actionTarget.pieceType = new MaskedData<PieceType>(card.actionTarget.pieceType);
             if (card.x) card.x = new MaskedData<number>(card.x);
             if (card.dir) card.dir = new MaskedData<Direction>(card.dir);
+            if (card.placePieceType) card.placePieceType = new MaskedData<PieceType>(card.placePieceType);
         }
         this.deck.forEach(fixCardMaskedDataObjects);
         this.players
