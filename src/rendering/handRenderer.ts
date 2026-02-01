@@ -1,5 +1,5 @@
 import p5 from "p5";
-import {GameAction, GameActionType, GameState} from "../gamelogic";
+import {GameAction, GameActionType, GameState, RedactType} from "../gamelogic";
 import {CardRenderer} from "./cardRenderer";
 import {DieRenderer} from "./dieRenderer";
 import {GameRenderer} from "./gameRenderer";
@@ -49,10 +49,27 @@ export class HandRenderer {
         p.push();
         p.translate(this.x, this.y);
 
+        // player color card backgorund
         let currentPlayer = gameRenderer.game.players.find(p => p.id === gameRenderer.game.currentPlayerId)!;
         p.fill(currentPlayer.color);
         p.noStroke();
         p.ellipse(0, 0, p.width * 0.8, cardHeight);
+
+        if (gameRenderer.game.shouldCurrentPlayerRedactCard()) {
+            p.push();
+            p.translate(0, -cardHeight*2);
+            p.background(255, 255, 255, 200); // haze
+            p.fill("#999");
+            p.stroke("#333");
+            p.rectMode(p.CENTER);
+            p.rect(0, 0, cardHeight, cardHeight/2, 10);
+
+            p.fill(0);
+            p.textAlign(p.CENTER);
+            p.textSize(20);
+            p.text("Redact a Card", 0, 0);
+            p.pop();
+        }
 
         let mouse = p.screenToWorld(p.mouseX, p.mouseY);
         let isMouseInHand = mouse.x > - p.width*0.4 && mouse.x < p.width*0.4 && mouse.y > -cardHeight*0.75 && mouse.y < cardHeight/2;
@@ -95,7 +112,9 @@ export class HandRenderer {
         p.push();
         p.translate(p.width - cardWidth - 10, p.height/2);
         p.scale(1.5);
+        this.revealedCardRenderer.card = gameRenderer.redactingCard;
         this.revealedCardRenderer.revealedCard = gameRenderer.revealedCard;
+        this.revealedCardRenderer.isRedacting = gameRenderer.redactingCard !== null;
         this.revealedCardRenderer.w = cardWidth;
         this.revealedCardRenderer.draw(p);
         p.pop();
@@ -103,6 +122,33 @@ export class HandRenderer {
 
     handleClick(gameRenderer: GameRenderer) {
         let game = gameRenderer.game!;
+
+        if (game.shouldCurrentPlayerRedactCard()) {
+            let redactType = null;
+            if (this.revealedCardRenderer.isActionHovered) {
+                redactType = RedactType.Action;
+            } else if (this.revealedCardRenderer.isActionTargetTypeHovered) {
+                redactType = RedactType.TargetType;
+            } else if (this.revealedCardRenderer.isActionPlacePieceTypeHovered) {
+                redactType = RedactType.PlacePieceType;
+            } else if (this.revealedCardRenderer.isActionPieceTypeHovered) {
+                redactType = RedactType.PieceType;
+            } else if (this.revealedCardRenderer.isActionXHovered) {
+                redactType = RedactType.X;
+            } else if (this.revealedCardRenderer.isActionDirHovered) {
+                redactType = RedactType.Dir;
+            }
+            if (redactType !== null) {
+                game.submitAction({
+                    playerId: game.currentPlayerId,
+                    action: GameActionType.RedactCard,
+                    cardId: gameRenderer.redactingCard!.id,
+                    redactType: redactType,
+                } as GameAction);
+                gameRenderer.redactingCard = null;
+                gameRenderer.revealedCard = null;
+            }
+        }
 
         for (let i = 0; i < this.activeRenderers; i++) {
             let cardRenderer = this.cardRenderers[i];
@@ -114,7 +160,11 @@ export class HandRenderer {
                 } as GameAction)
                 return;
             }
+            if (cardRenderer.isHovered && game.shouldCurrentPlayerRedactCard()) {
+                gameRenderer.redactingCard = cardRenderer.card;
+            }
         }
+
         if (this.dieRenderer.isHovered && game.canCurrentPlayerMovePawn()) {
             gameRenderer.isRollingDie = true;
             return;

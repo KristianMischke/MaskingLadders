@@ -47,6 +47,14 @@ export class CardRenderer {
     w: number;
     rotation: number = 0;
     isHovered: boolean = false;
+    isRedacting: boolean = false;
+
+    isActionHovered: boolean = false;
+    isActionTargetTypeHovered: boolean = false;
+    isActionPlacePieceTypeHovered: boolean = false;
+    isActionPieceTypeHovered: boolean = false;
+    isActionXHovered: boolean = false;
+    isActionDirHovered: boolean = false;
 
     constructor(card: Card | null, x: number, y: number) {
         this.card = card;
@@ -56,6 +64,12 @@ export class CardRenderer {
 
     update(p: p5) {
         this.isHovered = false;
+        this.isActionHovered = false;
+        this.isActionTargetTypeHovered = false;
+        this.isActionPlacePieceTypeHovered = false;
+        this.isActionPieceTypeHovered = false;
+        this.isActionXHovered = false;
+        this.isActionDirHovered = false;
     }
 
     draw(p: p5) {
@@ -95,7 +109,7 @@ export class CardRenderer {
         p.stroke(cardColor);
         p.fill(222);
 
-        if (mouse.x > -cardWidth/2 && mouse.x < cardWidth/2 && mouse.y > -cardHeight/2 && mouse.y < cardHeight/2) {
+        if (!this.isRedacting && mouse.x > -cardWidth/2 && mouse.x < cardWidth/2 && mouse.y > -cardHeight/2 && mouse.y < cardHeight/2) {
             // hovered
             this.isHovered = true;
             p.rotate(p.radians(-5));
@@ -121,31 +135,52 @@ export class CardRenderer {
         p.stroke(cardColor);
         p.strokeWeight(1);
 
+        let isSegmentHovered = () => {
+            let mouse = p.screenToWorld(p.mouseX, p.mouseY);
+            let isHovered = mouse.x > -cardWidth/2 && mouse.x < cardWidth/2 && mouse.y > -segmentHeight/2 && mouse.y < segmentHeight/2;
+            if (this.isRedacting) {
+                let color = p.color(cardColor);
+                p.push();
+                color.setAlpha(isHovered ? 255 : 45);
+                p.fill(color);
+                p.noStroke();
+                p.rect(0, 0, cardWidth - 10, segmentHeight - 2, 5);
+                p.pop();
+            }
+            return isHovered;
+        };
+
         let actionWord = getCardActionWord(action);
         p.translate(0, segmentHeight);
         p.text(actionWord, 0, 0);
+        this.isActionHovered = isSegmentHovered();
 
         if (placePieceType) {
             p.translate(0, segmentHeight);
             p.text(getPieceWord(placePieceType), 0, 0);
+            this.isActionPlacePieceTypeHovered = isSegmentHovered();
         }
 
         let targetWord = getTargetWord(actionTargetType);
         p.translate(0, segmentHeight);
         p.text(targetWord, 0, 0);
+        this.isActionTargetTypeHovered = isSegmentHovered();
 
         if (actionTargetType == SelectPieceType.All || actionTargetType == SelectPieceType.Target) {
             let targetPieceWord = getPieceWord(actionPieceType);
             p.translate(0, segmentHeight);
             p.text(targetPieceWord, 0, 0,);
+            this.isActionPieceTypeHovered = isSegmentHovered();
         }
         if (x) {
             p.translate(0, segmentHeight);
             p.text(x || "?", 0, 0);
+            this.isActionXHovered = isSegmentHovered();
         }
         if (dir) {
             p.translate(0, segmentHeight);
             p.text(getDirWord(dir), 0, 0);
+            this.isActionDirHovered = isSegmentHovered();
         }
         p.pop();
     }

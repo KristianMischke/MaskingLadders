@@ -115,6 +115,7 @@ export class GameRenderer {
 
     hoveredCard: Card | undefined = undefined;
     revealedCard: RevealedCard | undefined = undefined;
+    redactingCard: Card | undefined = undefined;
     isRollingDie: boolean = false;
     isDeckHovered: boolean = false;
 
@@ -157,11 +158,11 @@ export class GameRenderer {
         this.boardRenderer.draw(this);
         p.pop();
 
-        p.push();
-        let marginY = p.height - this.game.players.length * 50 - 100;
-        p.translate(p.width - SCOREBOARD_WIDTH/2, this.game.players.length * 50 + marginY/2);
-        this.isDeckHovered = renderDeck(p, this.game);
-        p.pop();
+        // let marginY = p.height - this.game.players.length * 50 - 100;
+        // p.push();
+        // p.translate(p.width - SCOREBOARD_WIDTH/2, this.game.players.length * 50 + marginY/2);
+        // this.isDeckHovered = renderDeck(p, this.game);
+        // p.pop();
 
         this.handRenderer.x = p.width/2;
         this.handRenderer.y = p.height;
@@ -179,9 +180,5 @@ export class GameRenderer {
         if (this.revealedCard) return;
 
         this.handRenderer.handleClick(this);
-
-        if (this.isDeckHovered) {
-
-        }
     }
 }

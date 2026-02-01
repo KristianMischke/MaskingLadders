@@ -9,6 +9,14 @@ const PLAYER_COLORS = [
     "#FFFF77",
 ]
 
+export enum RedactType {
+    Action = 'action',
+    TargetType = 'targetType',
+    PieceType = 'pieceType',
+    PlacePieceType = 'placePieceType',
+    X = 'x',
+    Dir = 'dir',
+}
 export enum Direction {
     Fwd = 'forward',
     Bck = 'backward'
@@ -225,6 +233,7 @@ export interface GameAction {
     boardHeight: number | null;
     numPlayers: number | null;
     rngState: seedrandom.State.Arc4 | null;
+    redactType: RedactType | null;
 }
 
 export class GameState {
@@ -465,6 +474,31 @@ export class GameState {
         }
     }
 
+    private executeRedaction(gameAction: GameAction) {
+        let currentPlayer = this.players.find(p => p.id === this.currentPlayerId)!;
+        let chosenCard = currentPlayer.hand.find(c => c.id === gameAction.cardId)!;
+        switch (gameAction.redactType) {
+            case RedactType.Action:
+                chosenCard.action.isMasked = true;
+                break;
+            case RedactType.TargetType:
+                chosenCard.actionTarget.targetType.isMasked = true;
+                break;
+            case RedactType.PlacePieceType:
+                chosenCard.placePieceType.isMasked = true;
+                break;
+            case RedactType.PieceType:
+                chosenCard.actionTarget.pieceType.isMasked = true;
+                break;
+            case RedactType.X:
+                chosenCard.x.isMasked = true;
+                break;
+            case RedactType.Dir:
+                chosenCard.dir.isMasked = true;
+                break;
+        }
+    }
+
     private getPlayerActionsSinceEndTurn() {
         let turnStartIndex = 0;
         for (let i = this.leger.length - 1; i >= 0; i--) {
@@ -484,6 +518,19 @@ export class GameState {
     canCurrentPlayerPlayCard() {
         return !this.getPlayerActionsSinceEndTurn()
             .some(ga => ga.action === GameActionType.PlayCard);
+    }
+    canCurrentPlayerSubmitCard() {
+        return !this.canCurrentPlayerPlayCard()
+            && !this.getPlayerActionsSinceEndTurn()
+                .some(ga => ga.action === GameActionType.CardAction);
+    }
+
+    shouldCurrentPlayerRedactCard() {
+        return !this.canCurrentPlayerMovePawn()
+            && !this.canCurrentPlayerPlayCard()
+            && !this.canCurrentPlayerSubmitCard()
+            && !this.getPlayerActionsSinceEndTurn()
+                .some(ga => ga.action === GameActionType.RedactCard);
     }
 
     private handleSystemAction(gameAction: GameAction) {
@@ -586,6 +633,7 @@ export class GameState {
                 this.executeCardAction(gameAction, revealedCard);
                 break;
             case GameActionType.RedactCard:
+                this.executeRedaction(gameAction);
                 break;
             case GameActionType.PassCard:
                 break;
