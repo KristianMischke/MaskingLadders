@@ -23,6 +23,8 @@ export const COIN_OUTLINE = "#000";
 export class PieceRenderer {
     x: number;
     y: number;
+    x2: number | null = null;
+    y2: number | null = null;
     w: number;
     rotation: number = 0;
     piece: BoardPiece | LongBoardPiece | undefined = undefined;
@@ -34,15 +36,32 @@ export class PieceRenderer {
         this.w = w;
     }
 
-    update(p: p5, game: GameState) {
+    update(p: p5, boardRenderer: BoardRenderer) {
         this.elapsedTimeSeconds += p.deltaTime / 1000;
         this.isHovered = false;
+
+        let [targetX, targetY] = boardRenderer.tileCenterToPixel(this.piece.x, this.piece.y);
+        if (this.x !== targetX || this.y !== targetY) {
+            this.x = p.lerp(this.x, targetX, 0.1);
+            this.y = p.lerp(this.y, targetY, 0.1);
+        }
+
+        if (this.piece.type === PieceType.Ladder || this.piece.type == PieceType.Shoot) {
+            let longPiece = this.piece as LongBoardPiece;
+            let [targetX2, targetY2] = boardRenderer.tileCenterToPixel(longPiece.x2, longPiece.y2);
+            if (this.x2 !== targetX2 || this.y2 !== targetY2) {
+                this.x2 = p.lerp(this.x2, targetX2, 0.1);
+                this.y2 = p.lerp(this.y2, targetY2, 0.1);
+            }
+        }
     }
 
     draw(p: p5, boardRenderer: BoardRenderer, hoveredCard: Card, revealedCard: RevealedCard) {
         let piece = this.piece;
         let game = boardRenderer.game;
-        let [px, py] = boardRenderer.tileCenterToPixel(piece.x, piece.y);
+
+        let px = this.x;
+        let py = this.y;
 
         let isHighlighted = false;
         let highlightType = HighlightType.None;
@@ -165,13 +184,19 @@ export class PieceRenderer {
             let color = game.players.find(p => p.id === piece.playerId)!.color;
             // if multiple pieces on same square, need to shift them so all are visible
             let numberOfPiecesOnSquare = game.pieces.filter(p => p.x === piece.x && p.y === piece.y).length;
-            let playerIndex = game.players.findIndex(p => p.id === piece.playerId);
-            let allOffset = this.w / 2 * (numberOfPiecesOnSquare - 1) / numberOfPiecesOnSquare;
-            let offset = this.w / 2 * playerIndex / numberOfPiecesOnSquare;
             p.fill(color);
             p.noStroke();
-            p.circle(px + offset - allOffset/2, py - headDiameter + offset, headDiameter);
-            p.arc(px + offset - allOffset/2, py + offset, bodyDiameter, bodyDiameter, p.PI, 0);
+            if (numberOfPiecesOnSquare > 1) {
+                let playerIndex = game.players.findIndex(p => p.id === piece.playerId);
+                let allOffset = this.w / 2 * (numberOfPiecesOnSquare - 1) / numberOfPiecesOnSquare;
+                let offset = this.w / 2 * playerIndex / numberOfPiecesOnSquare;
+                p.circle(px + offset - allOffset/2, py - headDiameter + offset, headDiameter);
+                p.arc(px + offset - allOffset/2, py + offset, bodyDiameter, bodyDiameter, p.PI, 0);
+            } else {
+                p.translate(0, this.w / 4);
+                p.circle(px, py - headDiameter, headDiameter);
+                p.arc(px, py, bodyDiameter, bodyDiameter, p.PI, 0);
+            }
         }
     }
 }

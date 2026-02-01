@@ -1,5 +1,5 @@
 import p5 from "p5";
-import {GameAction, GameActionType, GameState, SelectObjectType} from "../gamelogic";
+import {GameAction, GameActionType, GameState, LongBoardPiece, PieceType} from "../gamelogic";
 import {PieceRenderer} from "./pieceRenderer";
 import {GameRenderer} from "./gameRenderer";
 
@@ -47,13 +47,17 @@ export class BoardRenderer {
             let [px, py] = this.tileCenterToPixel(piece.x, piece.y);
             let pieceRenderer = this.pieceRenderers.get(piece.id);
             if (pieceRenderer) {
-                pieceRenderer.x = px;
-                pieceRenderer.y = py;
                 pieceRenderer.w = tileWidth;
                 pieceRenderer.piece = piece;
             } else {
                 pieceRenderer = new PieceRenderer(px, py, tileWidth);
                 pieceRenderer.piece = piece;
+                if (piece.type === PieceType.Ladder || piece.type === PieceType.Shoot) {
+                    let longPiece = piece as LongBoardPiece;
+                    let [px2, py2] = this.tileCenterToPixel(longPiece.x2, longPiece.y2);
+                    pieceRenderer.x2 = px2;
+                    pieceRenderer.y2 = py2;
+                }
                 this.pieceRenderers.set(piece.id, pieceRenderer);
             }
         }
@@ -62,7 +66,7 @@ export class BoardRenderer {
             if (!game.pieces.find(p => p.id === id)) {
                 this.pieceRenderers.delete(id);
             } else {
-                pieceRenderer.update(p, game);
+                pieceRenderer.update(p, this);
             }
         }
     }
