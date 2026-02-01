@@ -51,6 +51,13 @@ export class HandRenderer {
         p.noStroke();
         p.ellipse(0, 0, p.width * 0.8, cardHeight);
 
+        let mouse = p.screenToWorld(p.mouseX, p.mouseY);
+        let isMouseInHand = mouse.x > - p.width*0.4 && mouse.x < p.width*0.4 && mouse.y > -cardHeight*0.75 && mouse.y < cardHeight/2;
+        if (!isMouseInHand) {
+            // move cards down
+            p.translate(0, cardHeight*0.7);
+        }
+
         p.translate(this.activeRenderers * cardWidth / 2, 0);
         gameRenderer.hoveredCard = null;
         this.cardRenderers
@@ -69,8 +76,14 @@ export class HandRenderer {
 
         p.translate((-cardWidth - 5) * (this.activeRenderers - 1), 0);
 
+        // render die
         let dieSize = cardWidth / 2;
-        p.translate(-cardWidth/2 - dieSize/2 - 10, -cardHeight/2);
+        p.translate(-cardWidth/2 - dieSize/2 - 10, 0);
+        if (isMouseInHand) {
+            p.translate(0, -cardHeight/2);
+        } else {
+            p.translate(0, dieSize/2 - cardHeight);
+        }
         this.dieRenderer.w = cardWidth;
         this.dieRenderer.draw(p);
 

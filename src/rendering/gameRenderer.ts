@@ -4,15 +4,16 @@ import {BoardRenderer} from "./boardRenderer";
 import {HandRenderer} from "./handRenderer";
 import {COIN_COLOR, COIN_OUTLINE} from "./pieceRenderer";
 
+const SCOREBOARD_WIDTH = 200;
+
 function drawScoreboard(p: p5, game: GameState, elapsedTimeSeconds: number = 0) {
     p.push();
-    p.translate(p.width - 200, 10);
-    let scoreBoardWidth = 200;
+    p.translate(p.width - SCOREBOARD_WIDTH, 10);
     for (let player of game.players) {
         p.strokeWeight(2);
         p.fill(255);
         p.stroke(player.color);
-        p.rect(0, 0, 200, 40, 30);
+        p.rect(0, 0, SCOREBOARD_WIDTH, 40, 30);
         p.noStroke();
 
         if (player.id === game.currentPlayerId) {
@@ -25,7 +26,7 @@ function drawScoreboard(p: p5, game: GameState, elapsedTimeSeconds: number = 0) 
 
         p.push();
         {
-            let headDiameter = scoreBoardWidth / 10;
+            let headDiameter = SCOREBOARD_WIDTH / 10;
             let bodyDiameter = headDiameter * 2;
             p.fill(player.color);
             p.noStroke();
@@ -121,11 +122,17 @@ export class GameRenderer {
 
     draw() {
         if (!this.game) return;
-        this.p.background("#FFFFFF");
-        this.boardRenderer.draw(this);
+        let p = this.p;
+        p.background("#5c5a5a");
 
-        this.handRenderer.x = this.p.width/2;
-        this.handRenderer.y = this.p.height;
+        p.push();
+        let marginX = p.width - SCOREBOARD_WIDTH - this.boardRenderer.w;
+        p.translate(marginX/2, 0);
+        this.boardRenderer.draw(this);
+        p.pop();
+
+        this.handRenderer.x = p.width/2;
+        this.handRenderer.y = p.height;
         this.handRenderer.draw(this);
 
         // render scoreboard
