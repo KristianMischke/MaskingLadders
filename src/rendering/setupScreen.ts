@@ -1,6 +1,6 @@
 import p5 from 'p5';
-import { Button } from "./ui";
-import { startPassAndPlayGame } from './app'
+import { Button } from "../ui";
+import {loadSavedGame, removeSavedGame, startPassAndPlayGame} from '../app'
 // import { copyShareUrl } from "./networking";
 
 export class SetupScreen {
@@ -9,6 +9,9 @@ export class SetupScreen {
     playerUpButton: Button;
     playerDownButton: Button;
     playerCount: number = 2;
+
+    loadGameButton: Button;
+    newGameButton: Button;
 
     startPassAndPlayButton: Button;
     startPBEMButton: Button;
@@ -20,6 +23,9 @@ export class SetupScreen {
         this.playerUpButton = new Button(p.windowWidth/2+40, 80, 40, 30, "+");
         this.playerDownButton = new Button(p.windowWidth/2+40, 110, 40, 30, "-");
 
+        this.loadGameButton = new Button(p.windowWidth/2-120, 250, 240, 30, "Load Game");
+        this.newGameButton = new Button(p.windowWidth/2-120, 300, 240, 30, "New Game");
+
         this.startPassAndPlayButton = new Button(p.windowWidth/2-120, 200, 240, 30, "Start Pass & Play");
         this.startPBEMButton = new Button(p.windowWidth/2-120, 250, 240, 30, "Start PBEM");
         this.startP2PButton = new Button(p.windowWidth/2-120, 300, 240, 30, "Start P2P");
@@ -29,6 +35,19 @@ export class SetupScreen {
 
     draw(p: p5) {
         if (!this.showSetupScreen) return;
+
+        if (window.hasSavedGame) {
+            p.textSize(30);
+            p.textAlign(p.CENTER, p.CENTER);
+            p.fill(0);
+            p.text("Found saved game. Load it?", p.windowWidth/2, 200);
+
+            p.fill("#AAFFAA77");
+            this.loadGameButton.draw(p);
+            p.fill("#FFAAFF77");
+            this.newGameButton.draw(p);
+            return;
+        }
 
         // Player count & buttons
         p.circle(p.windowWidth/2 - 30, 100, 30);
@@ -44,8 +63,8 @@ export class SetupScreen {
         this.startPassAndPlayButton.draw(p);
         p.fill(127, 220, 127, 127);
         this.startPBEMButton.draw(p);
-        p.fill(127, 127, 127, 127);
-        this.startP2PButton.draw(p)
+        // p.fill(127, 127, 127, 127);
+        // this.startP2PButton.draw(p)
 
 
         // p.fill(127, 127, 220);
@@ -54,6 +73,12 @@ export class SetupScreen {
 
     mouseClicked(p: p5) {
         if (!this.showSetupScreen) return;
+
+        if (window.hasSavedGame) {
+            if (this.loadGameButton.isHovered(p)) loadSavedGame();
+            if (this.newGameButton.isHovered(p)) removeSavedGame();
+            return;
+        }
 
         if (this.playerUpButton.isHovered(p)) this.playerCount++;
         if (this.playerDownButton.isHovered(p)) this.playerCount--;

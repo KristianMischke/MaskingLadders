@@ -1,5 +1,5 @@
 import p5 from 'p5';
-import {SetupScreen} from "../setupScreen";
+import {SetupScreen} from "./setupScreen";
 import {GameRenderer} from "./gameRenderer";
 
 const sketch = (p: p5) => {
@@ -13,13 +13,12 @@ const sketch = (p: p5) => {
     };
 
     p.draw = () => {
+        p.background(220);
         if (window.game) {
             gameRenderer.update();
             gameRenderer.draw();
             return;
         }
-        p.background(220);
-        p.ellipse(p.mouseX, p.mouseY, 50, 50);
         setupScreen.draw(p);
     };
 

@@ -12,18 +12,24 @@ function setupGameHooks(game: GameState) {
 }
 
 window.onload = () => {
+    window.hasSavedGame = localStorage.getItem("game") != null;
+}
+
+export function loadSavedGame() {
     let localGame = localStorage.getItem("game");
     if (localGame) {
-        if (window.confirm("Found saved local game, continue?")) {
-            let game = new GameState();
-            game.loadFromSave(localGame)
-            console.log("loaded local game", game);
-            setupGameHooks(game);
-        } else {
-            localStorage.removeItem("game");
-        }
+        let game = new GameState();
+        game.loadFromSave(localGame)
+        console.log("loaded local game", game);
+        setupGameHooks(game);
     }
 }
+
+export function removeSavedGame() {
+    localStorage.removeItem("game");
+    window.hasSavedGame = false;
+}
+
 
 const PLAYER_COLORS = [
     "#FF0077",
