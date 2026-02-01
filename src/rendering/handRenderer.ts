@@ -55,7 +55,9 @@ export class HandRenderer {
         p.noStroke();
         p.ellipse(0, 0, p.width * 0.8, cardHeight);
 
-        if (gameRenderer.game.shouldCurrentPlayerRedactCard()) {
+        let isChoosingCard = gameRenderer.game.shouldCurrentPlayerPassCard() || gameRenderer.game.shouldCurrentPlayerRedactCard();
+        if (isChoosingCard) {
+            // add notification at screen center
             p.push();
             p.translate(0, -cardHeight*2);
             p.background(255, 255, 255, 200); // haze
@@ -64,11 +66,20 @@ export class HandRenderer {
             p.rectMode(p.CENTER);
             p.rect(0, 0, cardHeight, cardHeight/2, 10);
 
-            p.fill(0);
-            p.textAlign(p.CENTER);
-            p.textSize(20);
-            p.text("Redact a Card", 0, 0);
-            p.pop();
+            if (gameRenderer.game.shouldCurrentPlayerRedactCard()) {
+                p.fill(0);
+                p.textAlign(p.CENTER);
+                p.textSize(20);
+                p.text("Redact a card", 0, 0);
+                p.pop();
+            }
+            if (gameRenderer.game.shouldCurrentPlayerPassCard()) {
+                p.fill(0);
+                p.textAlign(p.CENTER);
+                p.textSize(20);
+                p.text("Pick card to pass", 0, 0);
+                p.pop();
+            }
         }
 
         let mouse = p.screenToWorld(p.mouseX, p.mouseY);
@@ -114,7 +125,7 @@ export class HandRenderer {
         p.scale(1.5);
         this.revealedCardRenderer.card = gameRenderer.redactingCard;
         this.revealedCardRenderer.revealedCard = gameRenderer.revealedCard;
-        this.revealedCardRenderer.isRedacting = gameRenderer.redactingCard !== null;
+        this.revealedCardRenderer.isRedacting = !!gameRenderer.redactingCard;
         this.revealedCardRenderer.w = cardWidth;
         this.revealedCardRenderer.draw(p);
         p.pop();
@@ -147,6 +158,7 @@ export class HandRenderer {
                 } as GameAction);
                 gameRenderer.redactingCard = null;
                 gameRenderer.revealedCard = null;
+                return true;
             }
         }
 
@@ -158,16 +170,31 @@ export class HandRenderer {
                     action: GameActionType.PlayCard,
                     cardId: cardRenderer.card.id,
                 } as GameAction)
-                return;
+                return true;
             }
             if (cardRenderer.isHovered && game.shouldCurrentPlayerRedactCard()) {
                 gameRenderer.redactingCard = cardRenderer.card;
+                return true;
+            }
+            if (cardRenderer.isHovered && game.shouldCurrentPlayerPassCard()) {
+                game.submitAction({
+                    playerId: game.currentPlayerId,
+                    action: GameActionType.PassCard,
+                    cardId: cardRenderer.card.id,
+                } as GameAction);
+                game.submitAction({
+                    playerId: game.currentPlayerId,
+                    action: GameActionType.EndTurn,
+                } as GameAction)
+                return true;
             }
         }
 
         if (this.dieRenderer.isHovered && game.canCurrentPlayerMovePawn()) {
             gameRenderer.isRollingDie = true;
-            return;
+            return true;
         }
+
+        return false;
     }
 }

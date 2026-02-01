@@ -1,5 +1,14 @@
 import p5 from "p5";
-import {Card, CardAction, Direction, PieceType, RevealedCard, SelectObjectType, SelectPieceType} from "../gamelogic";
+import {
+    Card,
+    CardAction,
+    Direction,
+    MaskOrMystery,
+    PieceType,
+    RevealedCard,
+    SelectObjectType,
+    SelectPieceType
+} from "../gamelogic";
 
 const CARD_COLORS = new Map<CardAction, string>([
     [CardAction.Move, "#44BC66"],
@@ -10,26 +19,37 @@ const CARD_COLORS = new Map<CardAction, string>([
     [CardAction.Remove, "#FF4466"],
     [CardAction.Place, "#FF4466"],
 
-    [CardAction.Unmask, "#AA9966"],
-    [CardAction.Mask, "#AA9966"],
+    [CardAction.Draw, "#AA9966"],
+    [CardAction.Skip, "#AA9966"],
 ]);
 
-function getCardActionWord(action: CardAction | undefined) {
-    if (!action) return "???";
+function getMysteryText() {
+    let s = "laskdfj;238u42ji34p9t5jdlfk";
+    let len = 7;
+    let start = Math.floor(Math.random() * (s.length - len));
+    return s.slice(start, len);
+}
+
+function getCardActionWord(action: CardAction | MaskOrMystery) {
+    if (action === MaskOrMystery.Mask) return "???";
+    if (action === MaskOrMystery.Mystery) return getMysteryText();
     return action.toString().toUpperCase();
 }
-function getTargetWord(target: SelectPieceType | SelectObjectType | undefined) {
-    if (!target) return "???";
+function getTargetWord(target: SelectPieceType | SelectObjectType | MaskOrMystery) {
+    if (target === MaskOrMystery.Mask) return "???";
+    if (target === MaskOrMystery.Mystery) return getMysteryText();
     return target.toString().toUpperCase();
 }
 
-function getPieceWord(pieceType: PieceType | undefined) {
-    if (!pieceType) return "???";
+function getPieceWord(pieceType: PieceType | MaskOrMystery) {
+    if (pieceType === MaskOrMystery.Mask) return "???";
+    if (pieceType === MaskOrMystery.Mystery) return getMysteryText();
     return pieceType.toString().toUpperCase();
 }
 
-function getDirWord(dir: Direction | undefined) {
-    if (!dir) return "???";
+function getDirWord(dir: Direction | MaskOrMystery) {
+    if (dir === MaskOrMystery.Mask) return "???";
+    if (dir === MaskOrMystery.Mystery) return getMysteryText();
     return dir.toString().toUpperCase();
 }
 
@@ -75,12 +95,12 @@ export class CardRenderer {
     draw(p: p5) {
         if (!this.card && !this.revealedCard) return;
 
-        let action: CardAction | undefined = undefined;
-        let actionTargetType: SelectObjectType | SelectPieceType | undefined = undefined;
-        let actionPieceType: PieceType | undefined = undefined;
-        let placePieceType: PieceType | undefined = undefined;
-        let x: number | undefined = undefined;
-        let dir: Direction | undefined = undefined;
+        let action: CardAction | MaskOrMystery = undefined;
+        let actionTargetType: SelectObjectType | SelectPieceType | MaskOrMystery | undefined = undefined;
+        let actionPieceType: PieceType | MaskOrMystery | undefined = undefined;
+        let placePieceType: PieceType | MaskOrMystery | undefined = undefined;
+        let x: number | MaskOrMystery | undefined = undefined;
+        let dir: Direction | MaskOrMystery | undefined = undefined;
         if (this.revealedCard) {
             action = this.revealedCard.action;
             actionTargetType = this.revealedCard.targetType;
@@ -91,8 +111,8 @@ export class CardRenderer {
         }
         if (this.card) {
             action = this.card.action.getKnownData();
-            actionTargetType = this.card.actionTarget.targetType.getKnownData();
-            actionPieceType = this.card.actionTarget.pieceType.getKnownData();
+            actionTargetType = this.card.actionTarget?.targetType.getKnownData();
+            actionPieceType = this.card.actionTarget?.pieceType.getKnownData();
             placePieceType = this.card.placePieceType?.getKnownData();
             x = this.card.x?.getKnownData();
             dir = this.card.dir?.getKnownData();
@@ -103,7 +123,14 @@ export class CardRenderer {
 
         let roundedness = cardWidth / 6;
         let mouse = p.screenToWorld(p.mouseX, p.mouseY);
-        let cardColor = CARD_COLORS.get(action) || "#FF00FF";
+        let cardColor: p5.Color;
+        if (action === MaskOrMystery.Mask) {
+            cardColor = p.color("#FF00FF");
+        } else if (action == MaskOrMystery.Mystery) {
+            cardColor = p.color(p.random(255), 0, p.random(255));
+        } else {
+            cardColor = p.color(CARD_COLORS.get(action));
+        }
         p.rectMode(p.CENTER);
         p.strokeWeight(3)
         p.stroke(cardColor);
@@ -161,10 +188,12 @@ export class CardRenderer {
             this.isActionPlacePieceTypeHovered = isSegmentHovered();
         }
 
-        let targetWord = getTargetWord(actionTargetType);
-        p.translate(0, segmentHeight);
-        p.text(targetWord, 0, 0);
-        this.isActionTargetTypeHovered = isSegmentHovered();
+        if (actionTargetType) {
+            let targetWord = getTargetWord(actionTargetType);
+            p.translate(0, segmentHeight);
+            p.text(targetWord, 0, 0);
+            this.isActionTargetTypeHovered = isSegmentHovered();
+        }
 
         if (actionTargetType == SelectPieceType.All || actionTargetType == SelectPieceType.Target) {
             let targetPieceWord = getPieceWord(actionPieceType);
@@ -173,8 +202,11 @@ export class CardRenderer {
             this.isActionPieceTypeHovered = isSegmentHovered();
         }
         if (x) {
+            let xWord = x.toString();
+            if (dir === MaskOrMystery.Mask) xWord = "???";
+            if (dir === MaskOrMystery.Mystery) xWord = getMysteryText();
             p.translate(0, segmentHeight);
-            p.text(x || "?", 0, 0);
+            p.text(xWord, 0, 0);
             this.isActionXHovered = isSegmentHovered();
         }
         if (dir) {

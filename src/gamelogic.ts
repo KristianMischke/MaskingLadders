@@ -1,5 +1,6 @@
 import seedrandom from 'seedrandom';
 
+const MAX_HAND_SIZE = 4;
 const PLAYER_COLORS = [
     "#FF0077",
     "#00FFFF",
@@ -55,8 +56,8 @@ export enum CardAction {
     Shrink = 'shrink',
     Remove = 'remove',
     Place = 'place',
-    Mask = 'mask',
-    Unmask = 'unmask'
+    Draw = 'draw',
+    Skip = 'skip'
 }
 
 export enum MaskType {
@@ -71,6 +72,11 @@ export enum MaskType {
 function selectRandom<T>(rng: seedrandom.PRNG, list: T[]) {
     const i = Math.floor(rng() * list.length);
     return list[i];
+}
+
+export enum MaskOrMystery {
+    Mask = 999,
+    Mystery = 9999,
 }
 
 interface MaskedDataProps<T> {
@@ -103,8 +109,8 @@ export class MaskedData<T> implements MaskedDataProps<T> {
     }
 
     getKnownData() {
-        if (this.isMasked) return undefined;
-        if (this.isMystery) return undefined;
+        if (this.isMasked) return MaskOrMystery.Mask;
+        if (this.isMystery) return MaskOrMystery.Mystery;
         return this.options[this.index];
     }
     revealData(rng: seedrandom.PRNG) {
@@ -135,7 +141,7 @@ export class ActionTarget {
 export interface Card {
     id: string;
     action: MaskedData<CardAction>;
-    actionTarget: ActionTarget;
+    actionTarget?: ActionTarget;
     placePieceType?: MaskedData<PieceType>;
     x?: MaskedData<number>;
     dir?: MaskedData<Direction>;
@@ -196,8 +202,8 @@ function generateCard(id: string, rng: seedrandom.PRNG, action: CardAction) {
         x = undefined;
         dir = undefined;
     }
-    if (action === CardAction.Unmask || action === CardAction.Mask) {
-        x = undefined;
+    if (action === CardAction.Draw || action === CardAction.Skip) {
+        actionTarget = undefined;
         dir = undefined;
     }
     return {id, action: maskedAction, actionTarget, x, dir, placePieceType} as Card;
@@ -216,6 +222,7 @@ export enum GameActionType {
     CardAction = 'cardAction',
     RedactCard = 'redactCard',
     PassCard = 'passCard',
+    DrawCard = 'drawCard',
     EndTurn = 'endTurn',
 }
 
@@ -283,10 +290,12 @@ export class GameState {
 
         let fixCardMaskedDataObjects = (card: Card) => {
             card.action = new MaskedData<CardAction>(card.action)
-            card.actionTarget = new ActionTarget(
-                new MaskedData<SelectPieceType|SelectObjectType>(card.actionTarget.targetType),
-                new MaskedData<PieceType>(card.actionTarget.pieceType)
-            );
+            if (card.actionTarget) {
+                card.actionTarget = new ActionTarget(
+                    new MaskedData<SelectPieceType | SelectObjectType>(card.actionTarget.targetType),
+                    new MaskedData<PieceType>(card.actionTarget.pieceType)
+                );
+            }
             if (card.x) card.x = new MaskedData<number>(card.x);
             if (card.dir) card.dir = new MaskedData<Direction>(card.dir);
             if (card.placePieceType) card.placePieceType = new MaskedData<PieceType>(card.placePieceType);
@@ -358,7 +367,7 @@ export class GameState {
             this.deck.push(generateCard(this.getNextId(), this.rng, CardAction.Move));
             this.deck.push(generateCard(this.getNextId(), this.rng, this.rng() < 0.5 ? CardAction.Grow : CardAction.Shrink));
             this.deck.push(generateCard(this.getNextId(), this.rng, this.rng() < 0.5 ? CardAction.Place : CardAction.Remove));
-            this.deck.push(generateCard(this.getNextId(), this.rng, this.rng() < 0.5 ? CardAction.Mask : CardAction.Unmask));
+            this.deck.push(generateCard(this.getNextId(), this.rng, this.rng() < 0.5 ? CardAction.Skip : CardAction.Draw));
         }
 
         // create mask cards (face cards)
@@ -467,9 +476,9 @@ export class GameState {
                 break;
             case CardAction.Place:
                 break;
-            case CardAction.Mask:
+            case CardAction.Skip:
                 break;
-            case CardAction.Unmask:
+            case CardAction.Draw:
                 break;
         }
     }
@@ -499,6 +508,29 @@ export class GameState {
         }
     }
 
+    private executePassCard(gameAction: GameAction) {
+        let currentPlayer = this.players.find(p => p.id === this.currentPlayerId)!;
+        let chosenCard = currentPlayer.hand.find(c => c.id === gameAction.cardId)!;
+        let playerIndex = this.players.findIndex(p => p.id === currentPlayer.id);
+        let nextPlayerIndex = (playerIndex + 1) % this.players.length;
+        let nextPlayer = this.players[nextPlayerIndex];
+        nextPlayer.hand.push(chosenCard);
+        currentPlayer.hand = currentPlayer.hand.filter(c => c !== chosenCard);
+    }
+
+    private executeDrawCard() {
+        let currentPlayer = this.players.find(p => p.id === this.currentPlayerId)!;
+        currentPlayer.hand.push(this.deck.pop());
+    }
+
+    private executeEndTurn() {
+        let currentPlayer = this.players.find(p => p.id === this.currentPlayerId)!;
+        let playerIndex = this.players.findIndex(p => p.id === currentPlayer.id);
+        let nextPlayerIndex = (playerIndex + 1) % this.players.length;
+        let nextPlayer = this.players[nextPlayerIndex];
+        this.currentPlayerId = nextPlayer.id;
+    }
+
     private getPlayerActionsSinceEndTurn() {
         let turnStartIndex = 0;
         for (let i = this.leger.length - 1; i >= 0; i--) {
@@ -510,19 +542,34 @@ export class GameState {
         return this.leger.slice(turnStartIndex);
     }
 
+    canCurrentPlayerDrawCard() {
+        let currentPlayer = this.players.find(p => p.id === this.currentPlayerId)!;
+        if (currentPlayer.hand.length < MAX_HAND_SIZE) return true;
+        return !this.getPlayerActionsSinceEndTurn()
+            .some(ga => ga.action === GameActionType.DrawCard);
+    }
+
     canCurrentPlayerMovePawn() {
         return !this.getPlayerActionsSinceEndTurn()
             .some(ga => ga.action === GameActionType.MovePawn);
     }
 
     canCurrentPlayerPlayCard() {
-        return !this.getPlayerActionsSinceEndTurn()
-            .some(ga => ga.action === GameActionType.PlayCard);
+        let currentPlayer = this.players.find(p => p.id === this.currentPlayerId)!;
+        if (currentPlayer.hand.length > MAX_HAND_SIZE) {
+            let lastGameAction = this.leger[this.leger.length - 1];
+            return lastGameAction.action !== GameActionType.PlayCard;
+        }
+        return false;
+        // return !this.getPlayerActionsSinceEndTurn()
+        //     .some(ga => ga.action === GameActionType.PlayCard);
     }
     canCurrentPlayerSubmitCard() {
-        return !this.canCurrentPlayerPlayCard()
-            && !this.getPlayerActionsSinceEndTurn()
-                .some(ga => ga.action === GameActionType.CardAction);
+        let lastGameAction = this.leger[this.leger.length - 1];
+        return lastGameAction.action === GameActionType.PlayCard;
+        // return !this.canCurrentPlayerPlayCard()
+        //     && !this.getPlayerActionsSinceEndTurn()
+        //         .some(ga => ga.action === GameActionType.CardAction);
     }
 
     shouldCurrentPlayerRedactCard() {
@@ -531,6 +578,13 @@ export class GameState {
             && !this.canCurrentPlayerSubmitCard()
             && !this.getPlayerActionsSinceEndTurn()
                 .some(ga => ga.action === GameActionType.RedactCard);
+    }
+
+    shouldCurrentPlayerPassCard() {
+        return !this.canCurrentPlayerMovePawn()
+            && !this.canCurrentPlayerPlayCard()
+            && !this.canCurrentPlayerSubmitCard()
+            && !this.shouldCurrentPlayerRedactCard();
     }
 
     private handleSystemAction(gameAction: GameAction) {
@@ -595,6 +649,16 @@ export class GameState {
         if (gameAction.action === GameActionType.MovePawn && !this.canCurrentPlayerMovePawn()) {
             throw new Error('Already moved pawn this turn');
         }
+        if (gameAction.action === GameActionType.RedactCard && !this.shouldCurrentPlayerRedactCard()) {
+            throw new Error('Invalid time to redact card');
+        }
+        if (gameAction.action === GameActionType.PassCard && !this.shouldCurrentPlayerPassCard()) {
+            throw new Error('Invalid time to pass card');
+        }
+        if (gameAction.action === GameActionType.DrawCard && !this.canCurrentPlayerDrawCard()) {
+            throw new Error('Cannot draw card');
+        }
+
         let playerHasCard = this.players.find(p => p.id === gameAction.playerId)!.hand.find(c => c.id === gameAction.cardId) !== undefined;
         let currentPlayingCard = this.leger.length > 0 && this.leger[this.leger.length - 1].cardId === gameAction.cardId;
         if (gameAction.cardId && !playerHasCard && !currentPlayingCard) {
@@ -616,7 +680,7 @@ export class GameState {
                 this.executeMove(SelectPieceType.Self, gameAction.dieRollResult, Direction.Fwd);
                 break;
             case GameActionType.PlayCard:
-                let [revealedTargetType, revealedPieceType] = card.actionTarget.revealData(this.rng);
+                let [revealedTargetType, revealedPieceType] = card.actionTarget?.revealData(this.rng) ?? [undefined, undefined];
                 gameAction.revealedCard = {
                     id: card.id,
                     action: card.action.revealData(this.rng),
@@ -636,6 +700,13 @@ export class GameState {
                 this.executeRedaction(gameAction);
                 break;
             case GameActionType.PassCard:
+                this.executePassCard(gameAction);
+                break;
+            case GameActionType.DrawCard:
+                this.executeDrawCard();
+                break;
+            case GameActionType.EndTurn:
+                this.executeEndTurn();
                 break;
         }
 

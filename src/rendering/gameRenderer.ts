@@ -1,8 +1,9 @@
 import p5 from "p5";
-import {Card, GameActionType, GameState, RevealedCard} from "../gamelogic";
+import {Card, GameAction, GameActionType, GameState, RedactType, RevealedCard, SelectPieceType} from "../gamelogic";
 import {BoardRenderer} from "./boardRenderer";
 import {HandRenderer} from "./handRenderer";
 import {COIN_COLOR, COIN_OUTLINE} from "./pieceRenderer";
+import seedrandom from "seedrandom";
 
 const SCOREBOARD_WIDTH = 200;
 
@@ -120,6 +121,7 @@ export class GameRenderer {
     isDeckHovered: boolean = false;
 
     elapsedTimeSeconds: number = 0;
+    revealedCardTimeSeconds: number = 0;
 
     constructor(p: p5) {
         this.p = p;
@@ -137,7 +139,21 @@ export class GameRenderer {
 
         let lastLeger = game.leger[game.leger.length-1];
         if (lastLeger && lastLeger.action === GameActionType.PlayCard) {
+            if (!this.revealedCard) {
+                this.revealedCardTimeSeconds = 0;
+            }
             this.revealedCard = lastLeger.revealedCard;
+            this.revealedCardTimeSeconds += p.deltaTime / 1000;
+
+            let cardRequiresTarget = this.revealedCard.targetType !== SelectPieceType.Target;
+            if (cardRequiresTarget && this.revealedCardTimeSeconds > 0.5) {
+                game.submitAction({
+                    playerId: game.currentPlayerId,
+                    action: GameActionType.CardAction,
+                    cardId: this.revealedCard.id,
+                } as GameAction);
+                this.revealedCard = undefined;
+            }
         } else {
             this.revealedCard = undefined;
         }
@@ -158,11 +174,11 @@ export class GameRenderer {
         this.boardRenderer.draw(this);
         p.pop();
 
-        // let marginY = p.height - this.game.players.length * 50 - 100;
-        // p.push();
-        // p.translate(p.width - SCOREBOARD_WIDTH/2, this.game.players.length * 50 + marginY/2);
-        // this.isDeckHovered = renderDeck(p, this.game);
-        // p.pop();
+        let marginY = p.height - this.game.players.length * 50 - 100;
+        p.push();
+        p.translate(p.width - SCOREBOARD_WIDTH/2, this.game.players.length * 50 + marginY/2);
+        this.isDeckHovered = renderDeck(p, this.game);
+        p.pop();
 
         this.handRenderer.x = p.width/2;
         this.handRenderer.y = p.height;
@@ -179,6 +195,13 @@ export class GameRenderer {
         // don't allow selecting new card when one is being played
         if (this.revealedCard) return;
 
-        this.handRenderer.handleClick(this);
+        if (this.handRenderer.handleClick(this)) return;
+
+        if (this.isDeckHovered && this.game.canCurrentPlayerDrawCard()) {
+            this.game.submitAction({
+                playerId: this.game.currentPlayerId,
+                action: GameActionType.DrawCard
+            } as GameAction);
+        }
     }
 }

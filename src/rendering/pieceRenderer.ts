@@ -66,7 +66,7 @@ export class PieceRenderer {
         let isHighlighted = false;
         let highlightType = HighlightType.None;
         if (revealedCard || hoveredCard) {
-            switch (revealedCard?.targetType ?? hoveredCard?.actionTarget.targetType.getKnownData() as SelectPieceType) {
+            switch (revealedCard?.targetType ?? hoveredCard?.actionTarget?.targetType.getKnownData() as SelectPieceType) {
                 case SelectPieceType.All:
                     isHighlighted = true;
                     highlightType = HighlightType.Selected;
@@ -84,7 +84,7 @@ export class PieceRenderer {
                     highlightType = HighlightType.Selected;
                     break;
             }
-            let pieceType = revealedCard?.pieceType ?? hoveredCard?.actionTarget.pieceType.getKnownData();
+            let pieceType = revealedCard?.pieceType ?? hoveredCard?.actionTarget?.pieceType.getKnownData();
             if (pieceType) {
                 isHighlighted &&= piece.type === pieceType;
             }
