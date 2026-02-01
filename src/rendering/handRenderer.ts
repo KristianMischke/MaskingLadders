@@ -18,7 +18,10 @@ export class HandRenderer {
         this.w = w;
     }
 
-    update(p: p5, game: GameState) {
+    update(gameRenderer: GameRenderer) {
+        let p = gameRenderer.p;
+        let game = gameRenderer.game!;
+
         let currentPlayer = game.players.find(p => p.id === game.currentPlayerId)!;
         currentPlayer.hand.forEach((card, i) => {
             if (i >= this.cardRenderers.length) {
@@ -32,7 +35,7 @@ export class HandRenderer {
         for (let i = 0; i < this.activeRenderers; i++) {
             this.cardRenderers[i].update(p);
         }
-        this.dieRenderer.update(p);
+        this.dieRenderer.update(gameRenderer);
         this.revealedCardRenderer.update(p);
     }
 
@@ -85,7 +88,7 @@ export class HandRenderer {
             p.translate(0, dieSize/2 - cardHeight);
         }
         this.dieRenderer.w = cardWidth;
-        this.dieRenderer.draw(p);
+        this.dieRenderer.draw(p, gameRenderer.isRollingDie);
 
         p.pop();
 
@@ -99,19 +102,21 @@ export class HandRenderer {
     }
 
     handleClick(gameRenderer: GameRenderer) {
+        let game = gameRenderer.game!;
+
         for (let i = 0; i < this.activeRenderers; i++) {
             let cardRenderer = this.cardRenderers[i];
-            if (cardRenderer.isHovered) {
-                gameRenderer.game.submitAction({
-                    playerId: gameRenderer.game.currentPlayerId,
+            if (cardRenderer.isHovered && game.canCurrentPlayerPlayCard()) {
+                game.submitAction({
+                    playerId: game.currentPlayerId,
                     action: GameActionType.PlayCard,
                     cardId: cardRenderer.card.id,
                 } as GameAction)
                 return;
             }
         }
-        if (this.dieRenderer.isHovered) {
-            gameRenderer.rollDie = true;
+        if (this.dieRenderer.isHovered && game.canCurrentPlayerMovePawn()) {
+            gameRenderer.isRollingDie = true;
             return;
         }
     }

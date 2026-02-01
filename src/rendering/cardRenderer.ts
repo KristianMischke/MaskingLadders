@@ -100,10 +100,8 @@ export class CardRenderer {
             this.isHovered = true;
             p.rotate(p.radians(-5));
             p.scale(1.1);
-            p.rect(0, 0, cardWidth, cardHeight, roundedness);
-        } else {
-            p.rect(0, 0, cardWidth, cardHeight, roundedness);
         }
+        p.rect(0, 0, cardWidth, cardHeight, roundedness);
 
         let numCardSegments = 4;
         if (placePieceType) numCardSegments++;

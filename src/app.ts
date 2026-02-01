@@ -1,5 +1,5 @@
 import JSONCrush from 'jsoncrush';
-import {GameState, Player} from './gamelogic';
+import {GameAction, GameActionType, GameState, Player} from './gamelogic';
 
 function setupGameHooks(game: GameState) {
     game.submitActionCallback = () => {
@@ -31,32 +31,22 @@ export function removeSavedGame() {
 }
 
 
-const PLAYER_COLORS = [
-    "#FF0077",
-    "#00FFFF",
-    "#CC7700",
-    "#00FF00",
-    "#7700FF",
-    "#FFFF77",
-]
 
 export function startPassAndPlayGame(numPlayers: number) {
     let game = new GameState();
 
-    for (let i = 0; i < numPlayers; i++) {
-        game.players.push({
-            id: game.getNextId(),
-            name: "P" + i,
-            color: PLAYER_COLORS[i],
-            hand: [],
-            score: 0,
-        } as Player)
-    }
-    game.setupBoard(8, 8);
-    game.generateDeck();
-    game.shuffleDeck();
-    game.dealCards();
-    game.currentPlayerId = game.players[0].id;
+    game.submitAction({
+        action: GameActionType.CreatePlayers,
+        numPlayers,
+    } as GameAction);
+    game.submitAction({
+        action: GameActionType.SetupBoard,
+        boardWidth: 8,
+        boardHeight: 8,
+    } as GameAction);
+    game.submitAction({action: GameActionType.GenerateDeck} as GameAction);
+    game.submitAction({action: GameActionType.ShuffleDeck} as GameAction);
+    game.submitAction({action: GameActionType.DealCards} as GameAction);
 
     localStorage.setItem("game", game.saveToJson());
     setupGameHooks(game);

@@ -13,18 +13,26 @@ const sketch = (p: p5) => {
     };
 
     p.draw = () => {
-        p.background(220);
-        if (window.game) {
-            gameRenderer.update();
-            gameRenderer.draw();
-            return;
+        try {
+            p.background(220);
+            if (window.game) {
+                gameRenderer.update();
+                gameRenderer.draw();
+                return;
+            }
+            setupScreen.draw(p);
+        } catch (e) {
+            console.error(e);
         }
-        setupScreen.draw(p);
     };
 
     p.mouseClicked = () => {
-        gameRenderer.handleClick();
-        setupScreen.mouseClicked(p);
+        try {
+            gameRenderer.handleClick();
+            setupScreen.mouseClicked(p);
+        } catch (e) {
+            console.error(e);
+        }
     };
     p.windowResized = () => {
         p.resizeCanvas(p.windowWidth, p.windowHeight);

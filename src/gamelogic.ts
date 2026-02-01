@@ -1,5 +1,14 @@
 import seedrandom from 'seedrandom';
 
+const PLAYER_COLORS = [
+    "#FF0077",
+    "#00FFFF",
+    "#CC7700",
+    "#00FF00",
+    "#7700FF",
+    "#FFFF77",
+]
+
 export enum Direction {
     Fwd = 'forward',
     Bck = 'backward'
@@ -187,11 +196,19 @@ function generateCard(id: string, rng: seedrandom.PRNG, action: CardAction) {
 }
 
 export enum GameActionType {
+    InitGame = 'initGame',
+    CreatePlayers = 'createPlayers',
+    SetupBoard = 'setupBoard',
+    GenerateDeck = 'generateDeck',
+    ShuffleDeck = 'shuffleDeck',
+    DealCards = 'dealCards',
+
     MovePawn = 'movePawn',
     PlayCard = 'playCard',
     CardAction = 'cardAction',
     RedactCard = 'redactCard',
     PassCard = 'passCard',
+    EndTurn = 'endTurn',
 }
 
 export interface GameAction {
@@ -203,11 +220,16 @@ export interface GameAction {
     targetPieceId: string | null;
     targetTileId: string | null;
     targetCardId: string | null;
+    dieRollResult: number | null;
+    boardWidth: number | null;
+    boardHeight: number | null;
+    numPlayers: number | null;
+    rngState: seedrandom.State.Arc4 | null;
 }
 
 export class GameState {
-    rng: seedrandom.StatefulPRNG<seedrandom.State.Arc4>;
-    nextId: number;
+    private rng: seedrandom.StatefulPRNG<seedrandom.State.Arc4>;
+    private nextId: number;
     boardWidth: number;
     boardHeight: number;
     players: Player[];
@@ -223,7 +245,10 @@ export class GameState {
         this.players = [];
         this.deck = [];
         this.pieces = [];
-        this.leger = [];
+        this.leger = [{
+            action: GameActionType.InitGame,
+            rngState: this.rng.state(),
+        } as GameAction];
         this.currentPlayerId = '';
     }
 
@@ -265,12 +290,25 @@ export class GameState {
             );
     }
 
-    getNextId() {
+    private getNextId() {
         this.nextId++;
         return this.nextId.toString();
     }
 
-    setupBoard(width: number, height: number) {
+    private createPlayers(numPlayers: number) {
+        for (let i = 0; i < numPlayers; i++) {
+            this.players.push({
+                id: this.getNextId(),
+                name: "P" + i,
+                color: PLAYER_COLORS[i],
+                hand: [],
+                score: 0,
+            } as Player)
+        }
+        this.currentPlayerId = this.players[0].id;
+    }
+
+    private setupBoard(width: number, height: number) {
         this.boardWidth = width;
         this.boardHeight = height;
         for (let y = 0; y < height; y++) {
@@ -305,7 +343,7 @@ export class GameState {
         }
     }
 
-    generateDeck() {
+    private generateDeck() {
         // generate 10 cards for each card type
         for (let i = 0; i < 10; i++) {
             this.deck.push(generateCard(this.getNextId(), this.rng, CardAction.Move));
@@ -320,11 +358,11 @@ export class GameState {
         }
     }
 
-    shuffleDeck() {
+    private shuffleDeck() {
         this.deck.sort(() => 0.5 - this.rng());
     }
 
-    dealCards() {
+    private dealCards() {
         let handSize = 4;
         for (let i = 0; i < this.players.length; i++) {
             for (let j = 0; j < handSize; j++) {
@@ -363,11 +401,17 @@ export class GameState {
         // check for shoots, ladders, coins, and bombs
     }
 
-    private executeMove(revealedCard: RevealedCard, targetPieceId: string) {
+    private executeMove(
+        targetType: SelectPieceType,
+        x: number,
+        dir: Direction,
+        targetPieceType: PieceType | null = null,
+        targetPieceId: string | null = null,
+    ) {
         let selectedPieces = []
-        switch (revealedCard.targetType) {
+        switch (targetType) {
             case SelectPieceType.All:
-                selectedPieces = this.pieces.filter(p => p.type === revealedCard.pieceType! || revealedCard.pieceType === PieceType.Anything);
+                selectedPieces = this.pieces.filter(p => p.type === targetPieceType! || targetPieceType === PieceType.Anything);
                 break;
             case SelectPieceType.Target:
                 selectedPieces.push(this.pieces.find(p => p.id === targetPieceId)!);
@@ -380,13 +424,13 @@ export class GameState {
                 break;
         }
 
-        for (let i = 0; i < revealedCard.x; i++) {
+        for (let i = 0; i < x; i++) {
             selectedPieces.forEach(p => {
-                let [x, y] = this.movePos(p.x, p.y, revealedCard.dir!)
+                let [x, y] = this.movePos(p.x, p.y, dir!)
                 p.x = x;
                 p.y = y;
                 if (p.x2 !== undefined) {
-                    let [x2, y2] = this.movePos(p.x2, p.y2, revealedCard.dir!)
+                    let [x2, y2] = this.movePos(p.x2, p.y2, dir!)
                     p.x2 = x2;
                     p.y2 = y2;
                 }
@@ -398,7 +442,13 @@ export class GameState {
     private executeCardAction(gameAction: GameAction, revealedCard: RevealedCard) {
         switch (revealedCard.action) {
             case CardAction.Move:
-                this.executeMove(revealedCard, gameAction.targetPieceId);
+                this.executeMove(
+                    revealedCard.targetType as SelectPieceType,
+                    revealedCard.x,
+                    revealedCard.dir,
+                    revealedCard.pieceType,
+                    gameAction.targetPieceId
+                );
                 break;
             case CardAction.Grow:
                 break;
@@ -415,9 +465,88 @@ export class GameState {
         }
     }
 
+    private getPlayerActionsSinceEndTurn() {
+        let turnStartIndex = 0;
+        for (let i = this.leger.length - 1; i >= 0; i--) {
+            if (this.leger[i].action === GameActionType.EndTurn) {
+                turnStartIndex = i + 1;
+                break;
+            }
+        }
+        return this.leger.slice(turnStartIndex);
+    }
+
+    canCurrentPlayerMovePawn() {
+        return !this.getPlayerActionsSinceEndTurn()
+            .some(ga => ga.action === GameActionType.MovePawn);
+    }
+
+    canCurrentPlayerPlayCard() {
+        return !this.getPlayerActionsSinceEndTurn()
+            .some(ga => ga.action === GameActionType.PlayCard);
+    }
+
+    private handleSystemAction(gameAction: GameAction) {
+        switch (gameAction.action) {
+            case GameActionType.InitGame:
+                this.rng = seedrandom("", {state: gameAction.rngState});
+                this.nextId = 0;
+                this.players = [];
+                this.deck = [];
+                this.pieces = [];
+                this.leger = [{
+                    action: GameActionType.InitGame,
+                    rngState: this.rng.state(),
+                } as GameAction];
+                this.currentPlayerId = '';
+                return;
+            case GameActionType.CreatePlayers:
+                if (this.leger.find(ga => ga.action === GameActionType.CreatePlayers) !== undefined) throw new Error('Cannot submit multiple CreatePlayers actions');
+                this.createPlayers(gameAction.numPlayers!);
+                break;
+            case GameActionType.SetupBoard:
+                if (this.leger.find(ga => ga.action === GameActionType.SetupBoard) !== undefined) throw new Error('Cannot submit multiple SetupBoard actions');
+                this.setupBoard(gameAction.boardWidth!, gameAction.boardHeight!);
+                break;
+            case GameActionType.GenerateDeck:
+                if (this.leger.find(ga => ga.action === GameActionType.GenerateDeck) !== undefined) throw new Error('Cannot submit multiple GenerateDeck actions');
+                this.generateDeck();
+                break;
+            case GameActionType.ShuffleDeck:
+                if (this.leger.find(ga => ga.action === GameActionType.ShuffleDeck) !== undefined) throw new Error('Cannot submit multiple ShuffleDeck actions');
+                this.shuffleDeck();
+                break;
+            case GameActionType.DealCards:
+                if (this.leger.find(ga => ga.action === GameActionType.DealCards) !== undefined) throw new Error('Cannot submit multiple DealCards actions');
+                this.dealCards();
+                break;
+        }
+        this.leger.push(gameAction);
+        if (this.submitActionCallback) this.submitActionCallback();
+    }
+
     submitAction(gameAction: GameAction) {
+        let isSystemAction = (
+            gameAction.action === GameActionType.InitGame
+            || gameAction.action === GameActionType.CreatePlayers
+            || gameAction.action === GameActionType.SetupBoard
+            || gameAction.action === GameActionType.GenerateDeck
+            || gameAction.action === GameActionType.ShuffleDeck
+            || gameAction.action === GameActionType.DealCards
+        );
+
+        if (isSystemAction) {
+            return this.handleSystemAction(gameAction);
+        }
+
         if (gameAction.playerId !== this.currentPlayerId) {
             throw new Error('Cannot submit action for another player');
+        }
+        if (gameAction.action === GameActionType.PlayCard && !this.canCurrentPlayerPlayCard()) {
+            throw new Error('Already played a card this turn');
+        }
+        if (gameAction.action === GameActionType.MovePawn && !this.canCurrentPlayerMovePawn()) {
+            throw new Error('Already moved pawn this turn');
         }
         let playerHasCard = this.players.find(p => p.id === gameAction.playerId)!.hand.find(c => c.id === gameAction.cardId) !== undefined;
         let currentPlayingCard = this.leger.length > 0 && this.leger[this.leger.length - 1].cardId === gameAction.cardId;
@@ -436,6 +565,8 @@ export class GameState {
 
         switch (gameAction.action) {
             case GameActionType.MovePawn:
+                gameAction.dieRollResult = Math.floor(this.rng() * 6) + 1;
+                this.executeMove(SelectPieceType.Self, gameAction.dieRollResult, Direction.Fwd);
                 break;
             case GameActionType.PlayCard:
                 let [revealedTargetType, revealedPieceType] = card.actionTarget.revealData(this.rng);

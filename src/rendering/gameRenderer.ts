@@ -82,6 +82,31 @@ function drawScoreboard(p: p5, game: GameState, elapsedTimeSeconds: number = 0) 
     p.pop();
 }
 
+function renderDeck(p: p5, game: GameState) {
+    let cardWidth = p.width / 8;
+    let cardHeight = cardWidth * 1.5;
+    let isHovered = false;
+    p.push();
+
+    let roundedness = cardWidth / 6;
+    let mouse = p.screenToWorld(p.mouseX, p.mouseY);
+    p.rectMode(p.CENTER);
+    p.strokeWeight(3)
+    p.stroke("#212a2c");
+    p.fill("#2b3f68");
+
+    p.rect(0, 0, cardWidth, cardHeight, roundedness);
+    if (mouse.x > -cardWidth/2 && mouse.x < cardWidth/2 && mouse.y > -cardHeight/2 && mouse.y < cardHeight/2) {
+        // hovered
+        isHovered = true;
+        p.rotate(p.radians(-5));
+    }
+    p.rect(0, 0, cardWidth, cardHeight, roundedness);
+
+    p.pop();
+    return isHovered;
+}
+
 export class GameRenderer {
     p: p5
     game: GameState;
@@ -90,7 +115,8 @@ export class GameRenderer {
 
     hoveredCard: Card | undefined = undefined;
     revealedCard: RevealedCard | undefined = undefined;
-    rollDie: boolean = false;
+    isRollingDie: boolean = false;
+    isDeckHovered: boolean = false;
 
     elapsedTimeSeconds: number = 0;
 
@@ -117,7 +143,7 @@ export class GameRenderer {
 
         // rescale board
         this.boardRenderer.update(p, game);
-        this.handRenderer.update(p, game);
+        this.handRenderer.update(this);
     }
 
     draw() {
@@ -129,6 +155,12 @@ export class GameRenderer {
         let marginX = p.width - SCOREBOARD_WIDTH - this.boardRenderer.w;
         p.translate(marginX/2, 0);
         this.boardRenderer.draw(this);
+        p.pop();
+
+        p.push();
+        let marginY = p.height - this.game.players.length * 50 - 100;
+        p.translate(p.width - SCOREBOARD_WIDTH/2, this.game.players.length * 50 + marginY/2);
+        this.isDeckHovered = renderDeck(p, this.game);
         p.pop();
 
         this.handRenderer.x = p.width/2;
@@ -143,9 +175,13 @@ export class GameRenderer {
         if (!this.game) return;
         this.boardRenderer.handleClick(this);
 
-        if (!this.revealedCard) {
-            // don't allow selecting new card when one is being played
-            this.handRenderer.handleClick(this);
+        // don't allow selecting new card when one is being played
+        if (this.revealedCard) return;
+
+        this.handRenderer.handleClick(this);
+
+        if (this.isDeckHovered) {
+
         }
     }
 }
