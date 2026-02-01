@@ -203,8 +203,8 @@ export class CardRenderer {
         }
         if (x) {
             let xWord = x.toString();
-            if (dir === MaskOrMystery.Mask) xWord = "???";
-            if (dir === MaskOrMystery.Mystery) xWord = getMysteryText();
+            if (x === MaskOrMystery.Mask) xWord = "???";
+            if (x === MaskOrMystery.Mystery) xWord = getMysteryText();
             p.translate(0, segmentHeight);
             p.text(xWord, 0, 0);
             this.isActionXHovered = isSegmentHovered();

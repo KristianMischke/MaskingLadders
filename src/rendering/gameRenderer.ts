@@ -93,7 +93,8 @@ function renderDeck(p: p5, game: GameState) {
     let mouse = p.screenToWorld(p.mouseX, p.mouseY);
     p.rectMode(p.CENTER);
     p.strokeWeight(3)
-    p.stroke("#212a2c");
+    let outlineColor = "#212a2c";
+    p.stroke(outlineColor);
     p.fill("#2b3f68");
 
     p.rect(0, 0, cardWidth, cardHeight, roundedness);
@@ -103,6 +104,14 @@ function renderDeck(p: p5, game: GameState) {
         p.rotate(p.radians(-5));
     }
     p.rect(0, 0, cardWidth, cardHeight, roundedness);
+
+    p.textAlign(p.CENTER, p.CENTER);
+    p.textSize(cardWidth / 8);
+    p.noStroke();
+    p.fill(outlineColor);
+    p.textStyle(p.BOLD);
+    p.text("Draw Card", 0, 0);
+    p.text("(" + game.deck.length + " left)", 0, cardHeight/8)
 
     p.pop();
     return isHovered;
@@ -166,6 +175,24 @@ export class GameRenderer {
     draw() {
         if (!this.game) return;
         let p = this.p;
+
+        if (this.game.isGameOver()) {
+            let winner = this.game.getWinningPlayer();
+            p.push();
+            p.background(winner.color);
+            p.fill(255);
+            p.stroke(0);
+            p.strokeWeight(5);
+            p.textAlign(p.CENTER, p.CENTER);
+            p.textSize(50);
+            p.textStyle(p.BOLD);
+            p.text("The Winner is: " + winner.name, p.width/2, p.height/2);
+            p.pop();
+
+            drawScoreboard(p, this.game, this.elapsedTimeSeconds);
+            return;
+        }
+
         p.background("#5c5a5a");
 
         p.push();

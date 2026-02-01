@@ -1,13 +1,5 @@
 import p5 from "p5";
-import {
-    BoardPiece, Card,
-    GameState,
-    LongBoardPiece,
-    PieceType,
-    RevealedCard,
-    SelectObjectType,
-    SelectPieceType
-} from "../gamelogic";
+import {BoardPiece, Card, LongBoardPiece, PieceType, RevealedCard, SelectPieceType} from "../gamelogic";
 import {BoardRenderer} from "./boardRenderer";
 
 enum HighlightType {
@@ -38,7 +30,6 @@ export class PieceRenderer {
 
     update(p: p5, boardRenderer: BoardRenderer) {
         this.elapsedTimeSeconds += p.deltaTime / 1000;
-        this.isHovered = false;
 
         let [targetX, targetY] = boardRenderer.tileCenterToPixel(this.piece.x, this.piece.y);
         if (this.x !== targetX || this.y !== targetY) {
@@ -62,6 +53,8 @@ export class PieceRenderer {
 
         let px = this.x;
         let py = this.y;
+        let px2 = this.x2;
+        let py2 = this.y2;
 
         let isHighlighted = false;
         let highlightType = HighlightType.None;
@@ -86,14 +79,12 @@ export class PieceRenderer {
             }
             let pieceType = revealedCard?.pieceType ?? hoveredCard?.actionTarget?.pieceType.getKnownData();
             if (pieceType) {
-                isHighlighted &&= piece.type === pieceType;
+                isHighlighted &&= piece.type === pieceType || pieceType === PieceType.Anything;
             }
         }
 
         let mouse = p.screenToWorld(p.mouseX, p.mouseY);
-        if (mouse.x > px - this.w/2 && mouse.x < px + this.w/2 && mouse.y > py - this.w/2 && mouse.y < py + this.w/2) {
-            this.isHovered = true;
-        }
+        this.isHovered = mouse.x > px - this.w/2 && mouse.x < px + this.w/2 && mouse.y > py - this.w/2 && mouse.y < py + this.w/2;
 
         if (isHighlighted) {
             p.noFill();
@@ -136,8 +127,6 @@ export class PieceRenderer {
             p.arc(px, py - bombRadius, bombRadius, bombRadius, p.PI * 3/2, p.PI/4);
         }
         if(piece.type === PieceType.Shoot) {
-            let longPiece = piece as LongBoardPiece;
-            let [px2, py2] = boardRenderer.tileCenterToPixel(longPiece.x2, longPiece.y2);
             p.stroke("#666666");
             p.strokeWeight(5);
             p.noFill();
@@ -156,8 +145,6 @@ export class PieceRenderer {
             p.spline(cx, cy, px, py, px2, py2, cx2, cy2);
         }
         if(piece.type === PieceType.Ladder) {
-            let longPiece = piece as LongBoardPiece;
-            let [px2, py2] = boardRenderer.tileCenterToPixel(longPiece.x2, longPiece.y2);
             p.stroke("#774444");
             p.strokeWeight(5);
             // latter rails

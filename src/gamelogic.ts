@@ -367,7 +367,8 @@ export class GameState {
             this.deck.push(generateCard(this.getNextId(), this.rng, CardAction.Move));
             this.deck.push(generateCard(this.getNextId(), this.rng, this.rng() < 0.5 ? CardAction.Grow : CardAction.Shrink));
             this.deck.push(generateCard(this.getNextId(), this.rng, this.rng() < 0.5 ? CardAction.Place : CardAction.Remove));
-            this.deck.push(generateCard(this.getNextId(), this.rng, this.rng() < 0.5 ? CardAction.Skip : CardAction.Draw));
+            // this.deck.push(generateCard(this.getNextId(), this.rng, this.rng() < 0.5 ? CardAction.Skip : CardAction.Draw));
+            this.deck.push(generateCard(this.getNextId(), this.rng, CardAction.Draw));
         }
 
         // create mask cards (face cards)
@@ -387,6 +388,13 @@ export class GameState {
                 this.players[i].hand.push(this.deck.pop());
             }
         }
+    }
+
+    winningSquare() {
+        let lastRowY = this.boardHeight - 1;
+        let xForward = lastRowY % 2 === 0;
+        let lastRowX = xForward ? this.boardWidth - 1 : 0;
+        return {x: lastRowX, y: lastRowY};
     }
 
     private movePos(x: number, y: number, dir: Direction) {
@@ -417,6 +425,42 @@ export class GameState {
 
     private landPiece(piece: BoardPiece) {
         // check for shoots, ladders, coins, and bombs
+        if (piece.type === PieceType.Ladder) return;
+        if (piece.type === PieceType.Shoot) return;
+
+        let shootAtLocation = this.pieces.find(p => p.type === PieceType.Shoot && p.x === piece.x && p.y === piece.y) as LongBoardPiece;
+        if (shootAtLocation) {
+            piece.x = shootAtLocation.x2;
+            piece.y = shootAtLocation.y2;
+            return;
+        }
+
+        let ladderAtLocation = this.pieces.find(p => p.type === PieceType.Ladder && p.x === piece.x && p.y === piece.y) as LongBoardPiece;
+        if (ladderAtLocation) {
+            piece.x = ladderAtLocation.x2;
+            piece.y = ladderAtLocation.y2;
+            return;
+        }
+
+        if (piece.type === PieceType.Pawn) {
+            let coinAtLocation = this.pieces.find(p => p.type === PieceType.Coin && p.x === piece.x && p.y === piece.y);
+            if (coinAtLocation) {
+                this.pieces.splice(this.pieces.indexOf(coinAtLocation), 1);
+                this.players.find(p => p.id === piece.playerId)!.score += 25;
+            }
+            let bombAtLocation = this.pieces.find(p => p.type === PieceType.Bomb && p.x === piece.x && p.y === piece.y);
+            if (bombAtLocation) {
+                this.pieces.splice(this.pieces.indexOf(bombAtLocation), 1);
+                this.players.find(p => p.id === piece.playerId)!.score -= 30;
+                // delete non-pawn pieces in 3x3
+                let neighbors = this.pieces.filter(p => Math.abs(p.x - piece.x) <= 1 && Math.abs(p.y - piece.y) <= 1 && p.type !== PieceType.Pawn);
+                neighbors.forEach(p => this.pieces.splice(this.pieces.indexOf(p), 1));
+            }
+            let winningSquare = this.winningSquare();
+            if (piece.x === winningSquare.x && piece.y === winningSquare.y) {
+                this.players.find(p => p.id === piece.playerId)!.score += 100;
+            }
+        }
     }
 
     private executeMove(
@@ -457,6 +501,76 @@ export class GameState {
         selectedPieces.forEach(p => this.landPiece(p));
     }
 
+    private executeGrowShrink(isGrow: boolean, targetPieceId: string | null) {
+        this.pieces.forEach(p => {
+            if (p.id === targetPieceId) {
+                let longPiece = p as LongBoardPiece;
+                if (p.type === PieceType.Ladder) {
+                    longPiece.y2 = longPiece.y2 + (isGrow ? 1 : -1);
+                }
+                if (p.type === PieceType.Shoot) {
+                    longPiece.y2 = longPiece.y2 + (isGrow ? -1 : 1);
+                }
+            }
+        });
+    }
+
+    private getSelectedPiecesForPlaceOrRemove(selectType: SelectPieceType, placePieceType: PieceType, pieceType: PieceType, x: number, dir: Direction, targetPieceId: string | null) {
+        let selectedPieces: BoardPiece[] = [];
+        this.pieces.forEach(p => {
+            if (selectType == SelectPieceType.Target && p.type === pieceType && p.id === targetPieceId) {
+                selectedPieces.push(p);
+            } else if (selectType == SelectPieceType.All && (p.type === pieceType || pieceType === PieceType.Anything)) {
+                selectedPieces.push(p);
+            } else if (selectType == SelectPieceType.Self && p.playerId === this.currentPlayerId) {
+                selectedPieces.push(p);
+            } else if (selectType == SelectPieceType.Other && p.playerId && p.playerId !== this.currentPlayerId) {
+                selectedPieces.push(p);
+            }
+        });
+        return selectedPieces;
+    }
+
+    getSelectedLocationsForPlaceOrRemove(selectType: SelectPieceType, placePieceType: PieceType, pieceType: PieceType, x: number, dir: Direction, targetPieceId: string | null) {
+        let selectedPieces = this.getSelectedPiecesForPlaceOrRemove(selectType, placePieceType, pieceType, x, dir, targetPieceId);
+        let allLocations: {x: number, y: number}[] = [];
+        selectedPieces.forEach(p => {
+            let [tx, ty] = [p.x, p.y];
+            for (let i = 0; i < x; i++) {
+                [tx, ty] = this.movePos(tx, ty, dir!);
+                allLocations.push({x: tx, y: ty});
+            }
+        });
+        return allLocations;
+    }
+
+    private executeRemove(selectType: SelectPieceType, removePieceType: PieceType, pieceType: PieceType, x: number, dir: Direction, targetPieceId: string | null) {
+        this.getSelectedLocationsForPlaceOrRemove(selectType, removePieceType, pieceType, x, dir, targetPieceId)
+            .forEach(({x, y}) => {
+                let piece = this.pieces.find(p => p.x === x && p.y === y);
+                if (piece && piece.type === removePieceType) {
+                    this.pieces.splice(this.pieces.indexOf(piece), 1);
+                }
+            });
+    }
+
+    private executePlace(selectType: SelectPieceType, placePieceType: PieceType, pieceType: PieceType, x: number, dir: Direction, targetPieceId: string | null) {
+        this.getSelectedLocationsForPlaceOrRemove(selectType, placePieceType, pieceType, x, dir, targetPieceId)
+            .forEach(({x, y}) => {
+                if (placePieceType === PieceType.Ladder) {
+                    let x2 = Math.max(Math.min(x + Math.floor(this.rng() * 5) - 2, this.boardWidth - 1), 0);
+                    let y2 = Math.min(y + Math.ceil(this.rng() * 3), this.boardHeight - 1);
+                    this.pieces.push({id: this.getNextId(), type: placePieceType, x, y, x2, y2} as LongBoardPiece);
+                } else if (placePieceType === PieceType.Shoot) {
+                    let x2 = Math.max(Math.min(x + Math.floor(this.rng() * 5) - 2, this.boardWidth - 1), 0);
+                    let y2 = Math.max(y - Math.ceil(this.rng() * 3), 0);
+                    this.pieces.push({id: this.getNextId(), type: placePieceType, x, y, x2, y2} as LongBoardPiece);
+                } else {
+                    this.pieces.push({id: this.getNextId(), type: placePieceType, x, y} as BoardPiece);
+                }
+            });
+    }
+
     private executeCardAction(gameAction: GameAction, revealedCard: RevealedCard) {
         switch (revealedCard.action) {
             case CardAction.Move:
@@ -469,16 +583,37 @@ export class GameState {
                 );
                 break;
             case CardAction.Grow:
+                this.executeGrowShrink(true, gameAction.targetPieceId);
                 break;
             case CardAction.Shrink:
+                this.executeGrowShrink(false, gameAction.targetPieceId);
                 break;
             case CardAction.Remove:
+                this.executeRemove(
+                    revealedCard.targetType as SelectPieceType,
+                    revealedCard.placePieceType,
+                    revealedCard.pieceType,
+                    revealedCard.x,
+                    revealedCard.dir,
+                    gameAction.targetPieceId
+                )
                 break;
             case CardAction.Place:
+                this.executePlace(
+                    revealedCard.targetType as SelectPieceType,
+                    revealedCard.placePieceType,
+                    revealedCard.pieceType,
+                    revealedCard.x,
+                    revealedCard.dir,
+                    gameAction.targetPieceId
+                )
                 break;
             case CardAction.Skip:
                 break;
             case CardAction.Draw:
+                for (let i = 0; i < revealedCard.x; i++) {
+                    this.executeDrawCard();
+                }
                 break;
         }
     }
@@ -520,7 +655,8 @@ export class GameState {
 
     private executeDrawCard() {
         let currentPlayer = this.players.find(p => p.id === this.currentPlayerId)!;
-        currentPlayer.hand.push(this.deck.pop());
+        let card = this.deck.pop();
+        if (card) currentPlayer.hand.push(card);
     }
 
     private executeEndTurn() {
@@ -556,14 +692,15 @@ export class GameState {
 
     canCurrentPlayerPlayCard() {
         let currentPlayer = this.players.find(p => p.id === this.currentPlayerId)!;
-        if (currentPlayer.hand.length > MAX_HAND_SIZE) {
+        let hasPlayedCard = this.getPlayerActionsSinceEndTurn()
+            .some(ga => ga.action === GameActionType.PlayCard);
+        if (currentPlayer.hand.length > MAX_HAND_SIZE || !hasPlayedCard) {
             let lastGameAction = this.leger[this.leger.length - 1];
             return lastGameAction.action !== GameActionType.PlayCard;
         }
         return false;
-        // return !this.getPlayerActionsSinceEndTurn()
-        //     .some(ga => ga.action === GameActionType.PlayCard);
     }
+
     canCurrentPlayerSubmitCard() {
         let lastGameAction = this.leger[this.leger.length - 1];
         return lastGameAction.action === GameActionType.PlayCard;
@@ -574,6 +711,7 @@ export class GameState {
 
     shouldCurrentPlayerRedactCard() {
         return !this.canCurrentPlayerMovePawn()
+            && !this.canCurrentPlayerDrawCard()
             && !this.canCurrentPlayerPlayCard()
             && !this.canCurrentPlayerSubmitCard()
             && !this.getPlayerActionsSinceEndTurn()
@@ -582,9 +720,21 @@ export class GameState {
 
     shouldCurrentPlayerPassCard() {
         return !this.canCurrentPlayerMovePawn()
+            && !this.canCurrentPlayerDrawCard()
             && !this.canCurrentPlayerPlayCard()
             && !this.canCurrentPlayerSubmitCard()
             && !this.shouldCurrentPlayerRedactCard();
+    }
+
+    isGameOver() {
+        let winningSquare = this.winningSquare();
+        let pawnInWinningSquare = this.pieces.find(p => p.x === winningSquare.x && p.y === winningSquare.y && p.type === PieceType.Pawn);
+        return pawnInWinningSquare || this.players.every(p => p.hand.length === 0);
+    }
+
+    getWinningPlayer() {
+        // get winning player by score
+        return this.players.reduce((prev, curr) => prev.score > curr.score ? prev : curr);
     }
 
     private handleSystemAction(gameAction: GameAction) {

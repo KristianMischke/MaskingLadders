@@ -1,5 +1,14 @@
 import p5 from "p5";
-import {GameAction, GameActionType, GameState, LongBoardPiece, PieceType} from "../gamelogic";
+import {
+    BoardPiece,
+    CardAction,
+    GameAction,
+    GameActionType,
+    GameState,
+    LongBoardPiece,
+    PieceType,
+    SelectPieceType
+} from "../gamelogic";
 import {PieceRenderer} from "./pieceRenderer";
 import {GameRenderer} from "./gameRenderer";
 
@@ -9,6 +18,7 @@ export class BoardRenderer {
     h: number;
     game: GameState | undefined = undefined;
     pieceRenderers: Map<string, PieceRenderer> = new Map();
+    elapsedTimeSeconds: number = 0;
     constructor(w: number, h: number) {
         this.w = w;
         this.h = h;
@@ -33,6 +43,8 @@ export class BoardRenderer {
     }
 
     update(p: p5, game: GameState) {
+        this.elapsedTimeSeconds += p.deltaTime / 1000;
+
         // rescale board
         let displayBoardWidth = Math.min(p.width - 200, p.height - 200);
         let displayBoardHeight = displayBoardWidth / game.boardWidth * game.boardHeight;
@@ -77,17 +89,54 @@ export class BoardRenderer {
 
         let tileWidth = this.w / game.boardWidth;
         let tileHeight = this.h / game.boardHeight;
-        p.push();
+        let hoveredPiece: BoardPiece | undefined = undefined;
+        this.pieceRenderers.forEach(pr => {
+            if (pr.isHovered) {
+                hoveredPiece = pr.piece;
+            }
+        });
+
+        let placeOrRemoveTiles: {x: number, y: number}[] = [];
+        if (gameRenderer.revealedCard) {
+            let revealedCard = gameRenderer.revealedCard;
+            placeOrRemoveTiles = game.getSelectedLocationsForPlaceOrRemove(
+                revealedCard.targetType as SelectPieceType,
+                revealedCard.placePieceType,
+                revealedCard.pieceType,
+                revealedCard.x,
+                revealedCard.dir,
+                hoveredPiece?.id
+            );
+        }
+
         // tiles
+        p.push();
+        p.translate(0, game.boardHeight * tileHeight - tileHeight);
+        let winningSquare = game.winningSquare();
         for (let y = 0; y < game.boardHeight; y++) {
+            p.push();
             for (let x = 0; x < game.boardWidth; x++) {
-                if (y % 2 === x % 2) {
+                if (x === winningSquare.x && y === winningSquare.y) {
+                    let c = p.color("#FFFF00");
+                    c.setBlue(127 + p.sin(this.elapsedTimeSeconds/2)*127);
+                    p.fill(c);
+                } else if (y % 2 === x % 2) {
                     p.fill("#BBCCAA");
                 } else {
                     p.fill("#AA8877");
                 }
-                p.rect(x * tileWidth, y * tileHeight, tileWidth, tileHeight);
+                p.rect(0, 0, tileWidth, tileHeight);
+
+                if (placeOrRemoveTiles.find(t => t.x === x && t.y === y)) {
+                    p.push();
+                    p.fill(gameRenderer.revealedCard.action === CardAction.Remove ? "#F0F" : "#0F9");
+                    p.rect(0, 0, tileWidth, tileHeight);
+                    p.pop();
+                }
+                p.translate(tileWidth, 0);
             }
+            p.pop();
+            p.translate(0, -tileHeight);
         }
         p.pop();
 
