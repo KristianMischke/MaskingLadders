@@ -46,6 +46,7 @@ export class HandRenderer {
         p.push();
         p.translate(this.x + this.activeRenderers * cardWidth / 2, this.y);
 
+        gameRenderer.hoveredCard = null;
         this.cardRenderers
             .slice(0, this.activeRenderers)
             .forEach(cr => {
@@ -54,6 +55,9 @@ export class HandRenderer {
                 p.translate((-cardWidth - 5) * index, -cardHeight/2);
                 cr.w = cardWidth;
                 cr.draw(p);
+                if (cr.isHovered) {
+                    gameRenderer.hoveredCard = cr.card;
+                }
                 p.pop();
             });
 

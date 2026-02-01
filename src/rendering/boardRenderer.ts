@@ -89,7 +89,7 @@ export class BoardRenderer {
 
         for (let [id, pieceRenderer] of this.pieceRenderers) {
             p.push();
-            pieceRenderer.draw(p, this, gameRenderer.revealedCard);
+            pieceRenderer.draw(p, this, gameRenderer.hoveredCard, gameRenderer.revealedCard);
             p.pop();
         }
     }

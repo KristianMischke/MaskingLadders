@@ -1,6 +1,6 @@
 import p5 from "p5";
 import {
-    BoardPiece,
+    BoardPiece, Card,
     GameState,
     LongBoardPiece,
     PieceType,
@@ -9,6 +9,13 @@ import {
     SelectPieceType
 } from "../gamelogic";
 import {BoardRenderer} from "./boardRenderer";
+
+enum HighlightType {
+    None,
+    HoverSelectable,
+    HoverSelecting,
+    Selected,
+}
 
 export class PieceRenderer {
     x: number;
@@ -27,29 +34,35 @@ export class PieceRenderer {
         this.isHovered = false;
     }
 
-    draw(p: p5, boardRenderer: BoardRenderer, revealedCard: RevealedCard) {
+    draw(p: p5, boardRenderer: BoardRenderer, hoveredCard: Card, revealedCard: RevealedCard) {
         let piece = this.piece;
         let game = boardRenderer.game;
         let [px, py] = boardRenderer.tileCenterToPixel(piece.x, piece.y);
 
         let isHighlighted = false;
-        if (revealedCard) {
-            switch (revealedCard.targetType) {
+        let highlightType = HighlightType.None;
+        if (revealedCard || hoveredCard) {
+            switch (revealedCard?.targetType ?? hoveredCard?.actionTarget.targetType.getKnownData() as SelectPieceType) {
                 case SelectPieceType.All:
                     isHighlighted = true;
+                    highlightType = HighlightType.Selected;
                     break;
                 case SelectPieceType.Target:
                     isHighlighted = true;
+                    highlightType = revealedCard ? HighlightType.HoverSelecting : HighlightType.HoverSelectable;
                     break;
                 case SelectPieceType.Self:
                     isHighlighted = this.piece!.playerId === game.currentPlayerId;
+                    highlightType = HighlightType.Selected;
                     break;
                 case SelectPieceType.Other:
-                    isHighlighted = this.piece!.playerId !== game.currentPlayerId;
+                    isHighlighted = this.piece.playerId && this.piece!.playerId !== game.currentPlayerId;
+                    highlightType = HighlightType.Selected;
                     break;
             }
-            if (revealedCard.pieceType) {
-                isHighlighted &&= piece.type === revealedCard.pieceType;
+            let pieceType = revealedCard?.pieceType ?? hoveredCard?.actionTarget.pieceType.getKnownData();
+            if (pieceType) {
+                isHighlighted &&= piece.type === pieceType;
             }
         }
 
@@ -60,10 +73,20 @@ export class PieceRenderer {
 
         if (isHighlighted) {
             p.noFill();
-            if (this.isHovered) {
-                p.stroke("#00FF00AA");
-            } else {
-                p.stroke("#FFFF00AA");
+            switch (highlightType) {
+                case HighlightType.Selected:
+                    p.stroke("#00FF00AA");
+                    break;
+                case HighlightType.HoverSelectable:
+                    p.stroke("#FFFF0077");
+                    break;
+                case HighlightType.HoverSelecting:
+                    if (this.isHovered) {
+                        p.stroke("#FFAA00AA");
+                    } else {
+                        p.stroke("#FFFF00AA");
+                    }
+                    break;
             }
             p.strokeWeight(10);
             p.rectMode(p.CENTER);

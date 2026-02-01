@@ -45,7 +45,7 @@ export function startPassAndPlayGame(numPlayers: number) {
 
     for (let i = 0; i < numPlayers; i++) {
         game.players.push({
-            id: i.toString(),
+            id: game.getNextId(),
             name: "P" + i,
             color: PLAYER_COLORS[i],
             hand: [],

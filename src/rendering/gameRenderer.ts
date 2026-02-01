@@ -32,6 +32,7 @@ export class GameRenderer {
     boardRenderer: BoardRenderer;
     handRenderer: HandRenderer;
 
+    hoveredCard: Card | undefined = undefined;
     revealedCard: RevealedCard | undefined = undefined;
     rollDie: boolean = false;
 
