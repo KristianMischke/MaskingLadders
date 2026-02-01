@@ -2,28 +2,83 @@ import p5 from "p5";
 import {Card, GameActionType, GameState, RevealedCard} from "../gamelogic";
 import {BoardRenderer} from "./boardRenderer";
 import {HandRenderer} from "./handRenderer";
+import {COIN_COLOR, COIN_OUTLINE} from "./pieceRenderer";
 
-function drawScoreboard(p: p5, game: GameState) {
-    let scoreBoardX = p.width - 100;
-    let scoreBoardY = 10;
-    let scoreBoardWidth = p.width - scoreBoardX;
-    let yOffset = 0;
+function drawScoreboard(p: p5, game: GameState, elapsedTimeSeconds: number = 0) {
+    p.push();
+    p.translate(p.width - 200, 10);
+    let scoreBoardWidth = 200;
     for (let player of game.players) {
-        // p.fill(player.color);
-        // p.rect(scoreBoardX, scoreBoardY + yOffset, 100, 20);
-
-        let headDiameter = scoreBoardWidth / 10;
-        let bodyDiameter = headDiameter * 2;
-        p.fill(player.color);
+        p.strokeWeight(2);
+        p.fill(255);
+        p.stroke(player.color);
+        p.rect(0, 0, 200, 40, 30);
         p.noStroke();
-        p.circle(scoreBoardX, scoreBoardY + bodyDiameter + yOffset - headDiameter, headDiameter);
-        p.arc(scoreBoardX, scoreBoardY + bodyDiameter + yOffset, bodyDiameter, bodyDiameter, p.PI, 0);
 
-        p.fill(0);
-        p.textAlign(p.LEFT, p.CENTER);
-        p.text(player.name + " Cards: " + player.hand.length, scoreBoardX, scoreBoardY + 12 + yOffset);
-        yOffset += 20;
+        if (player.id === game.currentPlayerId) {
+            p.push();
+            p.fill(player.color);
+            p.translate(-50 + p.sin(elapsedTimeSeconds*3) * 5, 0);
+            p.triangle(10, 10, 10, 30, 30, 20);
+            p.pop();
+        }
+
+        p.push();
+        {
+            let headDiameter = scoreBoardWidth / 10;
+            let bodyDiameter = headDiameter * 2;
+            p.fill(player.color);
+            p.noStroke();
+            p.translate(0, bodyDiameter);
+            p.circle(0, -headDiameter, headDiameter);
+            p.arc(0, 0, bodyDiameter, bodyDiameter, p.PI, 0);
+        }
+        p.pop();
+
+        p.push();
+        {
+            p.fill(0);
+            p.textAlign(p.LEFT, p.CENTER);
+            p.translate(20, 12);
+            p.text(player.name, 0, 0);
+        }
+        p.pop();
+
+        p.push();
+        {
+            p.translate(20, 25);
+            for (let i = 0; i < player.hand.length; i++) {
+                p.translate(10, 0);
+                p.fill(player.color);
+                p.stroke(0);
+                p.strokeWeight(3);
+                p.rect(0, 0, 20, 30, 6);
+            }
+        }
+        p.pop();
+
+        p.push();
+        {
+            p.translate(120, 20);
+
+            p.fill(COIN_COLOR);
+            p.stroke(COIN_OUTLINE);
+            p.strokeWeight(2);
+            p.ellipse(0, 0, 25 * p.sin(elapsedTimeSeconds), 25);
+
+            p.fill(0);
+            p.noStroke();
+            p.translate(25, 0);
+            p.textSize(15);
+            p.textStyle(p.BOLD);
+            p.textAlign(p.LEFT, p.CENTER);
+            p.text(player.score, 0, 0);
+        }
+        p.pop();
+
+        p.translate(0, 50);
     }
+    p.pop();
 }
 
 export class GameRenderer {
@@ -36,6 +91,8 @@ export class GameRenderer {
     revealedCard: RevealedCard | undefined = undefined;
     rollDie: boolean = false;
 
+    elapsedTimeSeconds: number = 0;
+
     constructor(p: p5) {
         this.p = p;
         this.boardRenderer = new BoardRenderer(p.width, p.height);
@@ -47,6 +104,8 @@ export class GameRenderer {
         if (!this.game) return;
         let p = this.p;
         let game = this.game;
+
+        this.elapsedTimeSeconds += p.deltaTime / 1000;
 
         let lastLeger = game.leger[game.leger.length-1];
         if (lastLeger && lastLeger.action === GameActionType.PlayCard) {
@@ -70,7 +129,7 @@ export class GameRenderer {
         this.handRenderer.draw(this);
 
         // render scoreboard
-        drawScoreboard(this.p, this.game);
+        drawScoreboard(this.p, this.game, this.elapsedTimeSeconds);
     }
 
     handleClick() {

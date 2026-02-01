@@ -139,6 +139,7 @@ export interface Player {
     name: string;
     color: string;
     hand: Card[];
+    score: number;
 }
 
 

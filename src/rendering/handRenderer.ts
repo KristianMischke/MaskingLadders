@@ -44,8 +44,14 @@ export class HandRenderer {
         let cardHeight = cardWidth * 1.5;
 
         p.push();
-        p.translate(this.x + this.activeRenderers * cardWidth / 2, this.y);
+        p.translate(this.x, this.y);
 
+        let currentPlayer = gameRenderer.game.players.find(p => p.id === gameRenderer.game.currentPlayerId)!;
+        p.fill(currentPlayer.color);
+        p.noStroke();
+        p.ellipse(0, 0, p.width * 0.8, cardHeight);
+
+        p.translate(this.activeRenderers * cardWidth / 2, 0);
         gameRenderer.hoveredCard = null;
         this.cardRenderers
             .slice(0, this.activeRenderers)

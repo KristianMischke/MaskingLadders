@@ -49,6 +49,7 @@ export function startPassAndPlayGame(numPlayers: number) {
             name: "P" + i,
             color: PLAYER_COLORS[i],
             hand: [],
+            score: 0,
         } as Player)
     }
     game.setupBoard(8, 8);

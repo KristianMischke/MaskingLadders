@@ -17,6 +17,9 @@ enum HighlightType {
     Selected,
 }
 
+export const COIN_COLOR = "#e8cf19";
+export const COIN_OUTLINE = "#000";
+
 export class PieceRenderer {
     x: number;
     y: number;
@@ -24,6 +27,7 @@ export class PieceRenderer {
     rotation: number = 0;
     piece: BoardPiece | LongBoardPiece | undefined = undefined;
     isHovered: boolean = false;
+    elapsedTimeSeconds: number = 0;
     constructor(x: number, y: number, w: number) {
         this.x = x;
         this.y = y;
@@ -31,6 +35,7 @@ export class PieceRenderer {
     }
 
     update(p: p5, game: GameState) {
+        this.elapsedTimeSeconds += p.deltaTime / 1000;
         this.isHovered = false;
     }
 
@@ -95,9 +100,10 @@ export class PieceRenderer {
 
         if(piece.type === PieceType.Coin) {
             p.strokeWeight(3)
-            p.stroke("#666644");
-            p.fill("#999944");
-            p.circle(px, py, this.w / 2);
+            p.stroke(COIN_OUTLINE);
+            p.fill(COIN_COLOR);
+            let coinAnim = p.sin(this.elapsedTimeSeconds);
+            p.ellipse(px, py, this.w / 2 * coinAnim, this.w / 2);
         }
         if(piece.type === PieceType.Bomb) {
             p.noStroke();
