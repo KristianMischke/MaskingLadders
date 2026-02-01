@@ -1,8 +1,8 @@
 import seedrandom from 'seedrandom';
 
 export enum Direction {
-    Fwd = 'fwd',
-    Bck = 'bck'
+    Fwd = 'forward',
+    Bck = 'backward'
 }
 
 export enum PieceType {
