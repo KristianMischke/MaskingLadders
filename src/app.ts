@@ -1,6 +1,16 @@
 import JSONCrush from 'jsoncrush';
 import {GameState, Player} from './gamelogic';
 
+function setupGameHooks(game: GameState) {
+    game.submitActionCallback = () => {
+        console.log("saving game");
+        localStorage.setItem("game", game.saveToJson());
+        // localStorage.setItem("crush", JSONCrush.crush(gameJson))
+    }
+
+    window.game = game;
+}
+
 window.onload = () => {
     let localGame = localStorage.getItem("game");
     if (localGame) {
@@ -8,7 +18,7 @@ window.onload = () => {
             let game = new GameState();
             game.loadFromSave(localGame)
             console.log("loaded local game", game);
-            window.game = game;
+            setupGameHooks(game);
         } else {
             localStorage.removeItem("game");
         }
@@ -41,7 +51,6 @@ export function startPassAndPlayGame(numPlayers: number) {
     game.dealCards();
     game.currentPlayerId = game.players[0].id;
 
-    window.game = game;
     localStorage.setItem("game", game.saveToJson());
-    // localStorage.setItem("crush", JSONCrush.crush(gameJson))
+    setupGameHooks(game);
 }

@@ -111,7 +111,7 @@ export class ActionTarget {
         if (revealedTargetType === SelectPieceType.All || revealedTargetType === SelectPieceType.Target) {
             return [revealedTargetType, this.pieceType.revealData(rng)];
         }
-        return [revealedTargetType];
+        return [revealedTargetType, undefined];
     }
 }
 
@@ -122,6 +122,16 @@ export interface Card {
     placePieceType?: MaskedData<PieceType>;
     x?: MaskedData<number>;
     dir?: MaskedData<Direction>;
+}
+
+export interface RevealedCard {
+    id: string;
+    action: CardAction;
+    targetType: SelectPieceType|SelectObjectType;
+    pieceType?: PieceType;
+    placePieceType?: PieceType;
+    x?: number;
+    dir?: Direction;
 }
 
 export interface Player {
@@ -178,6 +188,7 @@ function generateCard(id: string, rng: seedrandom.PRNG, action: CardAction) {
 export enum GameActionType {
     MovePawn = 'movePawn',
     PlayCard = 'playCard',
+    CardAction = 'cardAction',
     RedactCard = 'redactCard',
     PassCard = 'passCard',
 }
@@ -187,6 +198,7 @@ export interface GameAction {
     action: GameActionType;
     cardId: string | null;
 
+    revealedCard: RevealedCard | null;
     targetPieceId: string | null;
     targetTileId: string | null;
     targetCardId: string | null;
@@ -202,6 +214,8 @@ export class GameState {
     pieces: BoardPiece[];
     leger: GameAction[];
     currentPlayerId: string;
+
+    submitActionCallback?: () => void;
     constructor(seed?: string) {
         this.rng = seedrandom(seed, {state: true});
         this.nextId = 0;
@@ -234,8 +248,10 @@ export class GameState {
 
         let fixCardMaskedDataObjects = (card: Card) => {
             card.action = new MaskedData<CardAction>(card.action)
-            card.actionTarget.targetType = new MaskedData<SelectPieceType|SelectObjectType>(card.actionTarget.targetType);
-            card.actionTarget.pieceType = new MaskedData<PieceType>(card.actionTarget.pieceType);
+            card.actionTarget = new ActionTarget(
+                new MaskedData<SelectPieceType|SelectObjectType>(card.actionTarget.targetType),
+                new MaskedData<PieceType>(card.actionTarget.pieceType)
+            );
             if (card.x) card.x = new MaskedData<number>(card.x);
             if (card.dir) card.dir = new MaskedData<Direction>(card.dir);
             if (card.placePieceType) card.placePieceType = new MaskedData<PieceType>(card.placePieceType);
@@ -316,7 +332,134 @@ export class GameState {
         }
     }
 
-    submitAction(action: GameAction) {
-        this.leger.push(action);
+    private movePos(x: number, y: number, dir: Direction) {
+        let xForward = y % 2 === 0;
+
+        let isForwardEdge = (
+            (xForward && x === this.boardWidth-1)
+            || (!xForward && x === 0)
+        );
+        let isBackwardEdge = (
+            (xForward && x === 0)
+            || (!xForward && x === this.boardWidth-1)
+        );
+        if (dir === Direction.Fwd && isForwardEdge) {
+            y = Math.min(y + 1, this.boardHeight - 1);
+            return [x, y];
+        }
+        if (dir === Direction.Bck && isBackwardEdge) {
+            y = Math.max(y - 1, 0);
+            return [x, y];
+        }
+        switch (dir) {
+            case Direction.Fwd: x += xForward ? 1 : -1; break;
+            case Direction.Bck: x += xForward ? -1 : 1; break;
+        }
+        return [x, y];
+    }
+
+    private landPiece(piece: BoardPiece) {
+        // check for shoots, ladders, coins, and bombs
+    }
+
+    private executeMove(revealedCard: RevealedCard, targetPieceId: string) {
+        let selectedPieces = []
+        switch (revealedCard.targetType) {
+            case SelectPieceType.All:
+                selectedPieces = this.pieces.filter(p => p.type === revealedCard.pieceType! || revealedCard.pieceType === PieceType.Anything);
+                break;
+            case SelectPieceType.Target:
+                selectedPieces.push(this.pieces.find(p => p.id === targetPieceId)!);
+                break;
+            case SelectPieceType.Self:
+                selectedPieces.push(this.pieces.find(p => p.playerId === this.currentPlayerId)!);
+                break;
+            case SelectPieceType.Other:
+                selectedPieces = this.pieces.filter(p => p.playerId && p.playerId !== this.currentPlayerId);
+                break;
+        }
+
+        for (let i = 0; i < revealedCard.x; i++) {
+            selectedPieces.forEach(p => {
+                let [x, y] = this.movePos(p.x, p.y, revealedCard.dir!)
+                p.x = x;
+                p.y = y;
+                if (p.x2 !== undefined) {
+                    let [x2, y2] = this.movePos(p.x2, p.y2, revealedCard.dir!)
+                    p.x2 = x2;
+                    p.y2 = y2;
+                }
+            });
+        }
+        selectedPieces.forEach(p => this.landPiece(p));
+    }
+
+    private executeCardAction(gameAction: GameAction, revealedCard: RevealedCard) {
+        switch (revealedCard.action) {
+            case CardAction.Move:
+                this.executeMove(revealedCard, gameAction.targetPieceId);
+                break;
+            case CardAction.Grow:
+                break;
+            case CardAction.Shrink:
+                break;
+            case CardAction.Remove:
+                break;
+            case CardAction.Place:
+                break;
+            case CardAction.Mask:
+                break;
+            case CardAction.Unmask:
+                break;
+        }
+    }
+
+    submitAction(gameAction: GameAction) {
+        if (gameAction.playerId !== this.currentPlayerId) {
+            throw new Error('Cannot submit action for another player');
+        }
+        let playerHasCard = this.players.find(p => p.id === gameAction.playerId)!.hand.find(c => c.id === gameAction.cardId) !== undefined;
+        let currentPlayingCard = this.leger.length > 0 && this.leger[this.leger.length - 1].cardId === gameAction.cardId;
+        if (gameAction.cardId && !playerHasCard && !currentPlayingCard) {
+            throw new Error('Cannot submit action with invalid card');
+        }
+        if (gameAction.targetPieceId && this.pieces.find(p => p.id === gameAction.targetPieceId) === undefined) {
+            throw new Error('Cannot submit action with invalid target piece');
+        }
+        if (gameAction.action === GameActionType.PlayCard && gameAction.cardId === null) {
+            throw new Error('Cannot submit action without card');
+        }
+
+        let player = this.players.find(p => p.id === gameAction.playerId)!;
+        let card = player.hand.find(c => c.id === gameAction.cardId)!;
+
+        switch (gameAction.action) {
+            case GameActionType.MovePawn:
+                break;
+            case GameActionType.PlayCard:
+                let [revealedTargetType, revealedPieceType] = card.actionTarget.revealData(this.rng);
+                gameAction.revealedCard = {
+                    id: card.id,
+                    action: card.action.revealData(this.rng),
+                    targetType: revealedTargetType,
+                    pieceType: revealedPieceType,
+                    placePieceType: card.placePieceType?.revealData(this.rng),
+                    x: card.x?.revealData(this.rng),
+                    dir: card.dir?.revealData(this.rng),
+                } as RevealedCard;
+                player.hand = player.hand.filter(c => c.id !== card.id);
+                break;
+            case GameActionType.CardAction:
+                let revealedCard = this.leger.find(ga => ga.action === GameActionType.PlayCard && ga.cardId === gameAction.cardId)!.revealedCard!;
+                this.executeCardAction(gameAction, revealedCard);
+                break;
+            case GameActionType.RedactCard:
+                break;
+            case GameActionType.PassCard:
+                break;
+        }
+
+        this.leger.push(gameAction);
+        if (this.submitActionCallback) this.submitActionCallback();
     }
 }

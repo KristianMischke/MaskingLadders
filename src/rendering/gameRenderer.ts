@@ -1,6 +1,5 @@
 import p5 from "p5";
-import {Card, CardAction, Direction, GameState, PieceType, SelectObjectType, SelectPieceType} from "../gamelogic";
-import {CardRenderer} from "./cardRenderer";
+import {Card, GameActionType, GameState, RevealedCard} from "../gamelogic";
 import {BoardRenderer} from "./boardRenderer";
 import {HandRenderer} from "./handRenderer";
 
@@ -32,6 +31,10 @@ export class GameRenderer {
     game: GameState;
     boardRenderer: BoardRenderer;
     handRenderer: HandRenderer;
+
+    revealedCard: RevealedCard | undefined = undefined;
+    rollDie: boolean = false;
+
     constructor(p: p5) {
         this.p = p;
         this.boardRenderer = new BoardRenderer(p.width, p.height);
@@ -44,6 +47,13 @@ export class GameRenderer {
         let p = this.p;
         let game = this.game;
 
+        let lastLeger = game.leger[game.leger.length-1];
+        if (lastLeger && lastLeger.action === GameActionType.PlayCard) {
+            this.revealedCard = lastLeger.revealedCard;
+        } else {
+            this.revealedCard = undefined;
+        }
+
         // rescale board
         this.boardRenderer.update(p, game);
         this.handRenderer.update(p, game);
@@ -52,11 +62,11 @@ export class GameRenderer {
     draw() {
         if (!this.game) return;
         this.p.background("#FFFFFF");
-        this.boardRenderer.draw(this.p, this.game);
+        this.boardRenderer.draw(this);
 
         this.handRenderer.x = this.p.width/2;
         this.handRenderer.y = this.p.height;
-        this.handRenderer.draw(this.p, this.game);
+        this.handRenderer.draw(this);
 
         // render scoreboard
         drawScoreboard(this.p, this.game);
@@ -64,6 +74,11 @@ export class GameRenderer {
 
     handleClick() {
         if (!this.game) return;
+        this.boardRenderer.handleClick(this);
 
+        if (!this.revealedCard) {
+            // don't allow selecting new card when one is being played
+            this.handRenderer.handleClick(this);
+        }
     }
 }

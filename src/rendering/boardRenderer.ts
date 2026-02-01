@@ -1,6 +1,7 @@
 import p5 from "p5";
-import {GameState} from "../gamelogic";
+import {GameAction, GameActionType, GameState, SelectObjectType} from "../gamelogic";
 import {PieceRenderer} from "./pieceRenderer";
+import {GameRenderer} from "./gameRenderer";
 
 
 export class BoardRenderer {
@@ -66,7 +67,10 @@ export class BoardRenderer {
         }
     }
 
-    draw(p: p5, game: GameState) {
+    draw(gameRenderer: GameRenderer) {
+        let p = gameRenderer.p;
+        let game = gameRenderer.game!;
+
         let tileWidth = this.w / game.boardWidth;
         let tileHeight = this.h / game.boardHeight;
         p.push();
@@ -84,8 +88,24 @@ export class BoardRenderer {
         p.pop();
 
         for (let [id, pieceRenderer] of this.pieceRenderers) {
-            pieceRenderer.draw(p, this);
+            p.push();
+            pieceRenderer.draw(p, this, gameRenderer.revealedCard);
+            p.pop();
+        }
+    }
+
+    handleClick(gameRenderer: GameRenderer) {
+        if(!gameRenderer.revealedCard) return;
+        for (let [id, pieceRenderer] of this.pieceRenderers) {
+            if (pieceRenderer.isHovered) {
+                gameRenderer.game.submitAction({
+                    playerId: gameRenderer.game.currentPlayerId,
+                    action: GameActionType.CardAction,
+                    cardId: gameRenderer.revealedCard.id,
+                    targetPieceId: id,
+                } as GameAction);
+                return;
+            }
         }
     }
 }
-

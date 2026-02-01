@@ -1,5 +1,5 @@
 import p5 from "p5";
-import {Card, CardAction, Direction, PieceType, SelectObjectType, SelectPieceType} from "../gamelogic";
+import {Card, CardAction, Direction, PieceType, RevealedCard, SelectObjectType, SelectPieceType} from "../gamelogic";
 
 const CARD_COLORS = new Map<CardAction, string>([
     [CardAction.Move, "#44BC66"],
@@ -41,6 +41,7 @@ function getCardDimensions(p: p5) {
 
 export class CardRenderer {
     card?: Card;
+    revealedCard?: RevealedCard = null;
     x: number;
     y: number;
     w: number;
@@ -58,20 +59,45 @@ export class CardRenderer {
     }
 
     draw(p: p5) {
-        let card = this.card;
+        if (!this.card && !this.revealedCard) return;
+
+        let action: CardAction | undefined = undefined;
+        let actionTargetType: SelectObjectType | SelectPieceType | undefined = undefined;
+        let actionPieceType: PieceType | undefined = undefined;
+        let placePieceType: PieceType | undefined = undefined;
+        let x: number | undefined = undefined;
+        let dir: Direction | undefined = undefined;
+        if (this.revealedCard) {
+            action = this.revealedCard.action;
+            actionTargetType = this.revealedCard.targetType;
+            actionPieceType = this.revealedCard.pieceType;
+            placePieceType = this.revealedCard.placePieceType;
+            x = this.revealedCard.x;
+            dir = this.revealedCard.dir;
+        }
+        if (this.card) {
+            action = this.card.action.getKnownData();
+            actionTargetType = this.card.actionTarget.targetType.getKnownData();
+            actionPieceType = this.card.actionTarget.pieceType.getKnownData();
+            placePieceType = this.card.placePieceType?.getKnownData();
+            x = this.card.x?.getKnownData();
+            dir = this.card.dir?.getKnownData();
+        }
 
         let cardWidth = this.w;
         let cardHeight = cardWidth * 1.5;
 
         let roundedness = cardWidth / 6;
         let mouse = p.screenToWorld(p.mouseX, p.mouseY);
-        let cardColor = CARD_COLORS.get(card.action.getKnownData()) || "#FF00FF";
+        let cardColor = CARD_COLORS.get(action) || "#FF00FF";
         p.rectMode(p.CENTER);
         p.strokeWeight(3)
         p.stroke(cardColor);
         p.fill(222);
+
         if (mouse.x > -cardWidth/2 && mouse.x < cardWidth/2 && mouse.y > -cardHeight/2 && mouse.y < cardHeight/2) {
             // hovered
+            this.isHovered = true;
             p.rotate(p.radians(-5));
             p.scale(1.1);
             p.rect(0, 0, cardWidth, cardHeight, roundedness);
@@ -80,12 +106,12 @@ export class CardRenderer {
         }
 
         let numCardSegments = 4;
-        if (card.placePieceType) numCardSegments++;
-        if (card.actionTarget.targetType.getKnownData() in [SelectPieceType.All, SelectPieceType.Target]) {
+        if (placePieceType) numCardSegments++;
+        if (actionTargetType in [SelectPieceType.All, SelectPieceType.Target]) {
             numCardSegments++;
         }
-        if (card.x) numCardSegments++;
-        if (card.dir) numCardSegments++;
+        if (x) numCardSegments++;
+        if (dir) numCardSegments++;
         let segmentHeight = cardHeight / numCardSegments;
 
         p.push();
@@ -97,33 +123,31 @@ export class CardRenderer {
         p.stroke(cardColor);
         p.strokeWeight(1);
 
-        let actionWord = getCardActionWord(card.action.getKnownData());
+        let actionWord = getCardActionWord(action);
         p.translate(0, segmentHeight);
         p.text(actionWord, 0, 0);
 
-        if (card.placePieceType) {
+        if (placePieceType) {
             p.translate(0, segmentHeight);
-            p.text(getPieceWord(card.placePieceType?.getKnownData()), 0, 0);
+            p.text(getPieceWord(placePieceType), 0, 0);
         }
 
-        let knownActionTarget = card.actionTarget.targetType.getKnownData();
-        let targetWord = getTargetWord(knownActionTarget);
+        let targetWord = getTargetWord(actionTargetType);
         p.translate(0, segmentHeight);
         p.text(targetWord, 0, 0);
 
-        if (knownActionTarget == SelectPieceType.All || knownActionTarget == SelectPieceType.Target) {
-            let knownTargetPieceType = card.actionTarget.pieceType.getKnownData();
-            let targetPieceWord = getPieceWord(knownTargetPieceType);
+        if (actionTargetType == SelectPieceType.All || actionTargetType == SelectPieceType.Target) {
+            let targetPieceWord = getPieceWord(actionPieceType);
             p.translate(0, segmentHeight);
             p.text(targetPieceWord, 0, 0,);
         }
-        if (card.x) {
+        if (x) {
             p.translate(0, segmentHeight);
-            p.text(card.x.getKnownData() || "?", 0, 0);
+            p.text(x || "?", 0, 0);
         }
-        if (card.dir) {
+        if (dir) {
             p.translate(0, segmentHeight);
-            p.text(getDirWord(card.dir.getKnownData()), 0, 0);
+            p.text(getDirWord(dir), 0, 0);
         }
         p.pop();
     }

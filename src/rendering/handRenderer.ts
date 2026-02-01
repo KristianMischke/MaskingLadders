@@ -1,12 +1,17 @@
 import p5 from "p5";
-import {GameState} from "../gamelogic";
+import {GameAction, GameActionType, GameState} from "../gamelogic";
 import {CardRenderer} from "./cardRenderer";
+import {DieRenderer} from "./dieRenderer";
+import {GameRenderer} from "./gameRenderer";
 
 export class HandRenderer {
     x: number;
     y: number;
     w: number;
     cardRenderers: CardRenderer[] = [];
+    activeRenderers: number;
+    dieRenderer: DieRenderer = new DieRenderer(0, 0, 0);
+    revealedCardRenderer: CardRenderer = new CardRenderer(null, 0, 0);
     constructor(x: number, y: number, w: number) {
         this.x = x;
         this.y = y;
@@ -23,31 +28,68 @@ export class HandRenderer {
             }
             this.cardRenderers[i].card = card;
         });
+        this.activeRenderers = currentPlayer.hand.length;
+        for (let i = 0; i < this.activeRenderers; i++) {
+            this.cardRenderers[i].update(p);
+        }
+        this.dieRenderer.update(p);
+        this.revealedCardRenderer.update(p);
     }
 
-    draw(p: p5, game: GameState) {
+    draw(gameRenderer: GameRenderer) {
+        let p = gameRenderer.p;
+
         // scale card dimensions
         let cardWidth = p.width / 8;
         let cardHeight = cardWidth * 1.5;
 
-        let currentPlayer = game.players.find(p => p.id === game.currentPlayerId)!;
         p.push();
-        // p.translate(p.width / 2 + currentPlayer.hand.length * cardWidth / 2, p.height);
-        p.translate(this.x + currentPlayer.hand.length * cardWidth / 2, this.y);
-        currentPlayer.hand.forEach((card, i) => {
-            p.translate(-cardWidth - 5, 0);
-            p.push();
-            p.translate(0, -cardHeight/2);
-            let cardRenderer = this.cardRenderers[i];
-            cardRenderer.w = cardWidth;
-            cardRenderer.x = cardWidth / 2;
-            this.cardRenderers[i].draw(p);
-            p.pop();
-        });
+        p.translate(this.x + this.activeRenderers * cardWidth / 2, this.y);
+
+        this.cardRenderers
+            .slice(0, this.activeRenderers)
+            .forEach(cr => {
+                let index = this.cardRenderers.indexOf(cr);
+                p.push();
+                p.translate((-cardWidth - 5) * index, -cardHeight/2);
+                cr.w = cardWidth;
+                cr.draw(p);
+                p.pop();
+            });
+
+        p.translate((-cardWidth - 5) * (this.activeRenderers - 1), 0);
 
         let dieSize = cardWidth / 2;
-        p.translate(-dieSize/2 - 5, 0);
-        // draw die
+        p.translate(-cardWidth/2 - dieSize/2 - 10, -cardHeight/2);
+        this.dieRenderer.w = cardWidth;
+        this.dieRenderer.draw(p);
+
         p.pop();
+
+        p.push();
+        p.translate(p.width - cardWidth - 10, p.height/2);
+        p.scale(1.5);
+        this.revealedCardRenderer.revealedCard = gameRenderer.revealedCard;
+        this.revealedCardRenderer.w = cardWidth;
+        this.revealedCardRenderer.draw(p);
+        p.pop();
+    }
+
+    handleClick(gameRenderer: GameRenderer) {
+        for (let i = 0; i < this.activeRenderers; i++) {
+            let cardRenderer = this.cardRenderers[i];
+            if (cardRenderer.isHovered) {
+                gameRenderer.game.submitAction({
+                    playerId: gameRenderer.game.currentPlayerId,
+                    action: GameActionType.PlayCard,
+                    cardId: cardRenderer.card.id,
+                } as GameAction)
+                return;
+            }
+        }
+        if (this.dieRenderer.isHovered) {
+            gameRenderer.rollDie = true;
+            return;
+        }
     }
 }

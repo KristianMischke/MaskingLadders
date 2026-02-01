@@ -1,5 +1,13 @@
 import p5 from "p5";
-import {BoardPiece, GameState, LongBoardPiece, PieceType} from "../gamelogic";
+import {
+    BoardPiece,
+    GameState,
+    LongBoardPiece,
+    PieceType,
+    RevealedCard,
+    SelectObjectType,
+    SelectPieceType
+} from "../gamelogic";
 import {BoardRenderer} from "./boardRenderer";
 
 export class PieceRenderer {
@@ -19,11 +27,49 @@ export class PieceRenderer {
         this.isHovered = false;
     }
 
-    draw(p: p5, boardRenderer: BoardRenderer) {
+    draw(p: p5, boardRenderer: BoardRenderer, revealedCard: RevealedCard) {
         let piece = this.piece;
         let game = boardRenderer.game;
-
         let [px, py] = boardRenderer.tileCenterToPixel(piece.x, piece.y);
+
+        let isHighlighted = false;
+        if (revealedCard) {
+            switch (revealedCard.targetType) {
+                case SelectPieceType.All:
+                    isHighlighted = true;
+                    break;
+                case SelectPieceType.Target:
+                    isHighlighted = true;
+                    break;
+                case SelectPieceType.Self:
+                    isHighlighted = this.piece!.playerId === game.currentPlayerId;
+                    break;
+                case SelectPieceType.Other:
+                    isHighlighted = this.piece!.playerId !== game.currentPlayerId;
+                    break;
+            }
+            if (revealedCard.pieceType) {
+                isHighlighted &&= piece.type === revealedCard.pieceType;
+            }
+        }
+
+        let mouse = p.screenToWorld(p.mouseX, p.mouseY);
+        if (mouse.x > px - this.w/2 && mouse.x < px + this.w/2 && mouse.y > py - this.w/2 && mouse.y < py + this.w/2) {
+            this.isHovered = true;
+        }
+
+        if (isHighlighted) {
+            p.noFill();
+            if (this.isHovered) {
+                p.stroke("#00FF00AA");
+            } else {
+                p.stroke("#FFFF00AA");
+            }
+            p.strokeWeight(10);
+            p.rectMode(p.CENTER);
+            p.rect(px, py, this.w, this.w);
+        }
+
         if(piece.type === PieceType.Coin) {
             p.strokeWeight(3)
             p.stroke("#666644");
