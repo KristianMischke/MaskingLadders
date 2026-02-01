@@ -1,0 +1,28 @@
+{
+  // Visit https://aka.ms/tsconfig to read more about this file
+  "compilerOptions": {
+    // File Layout
+    "rootDir": "./src",
+    "outDir": "./dist",
+
+    "target": "ES6",
+    "module": "None",
+    "types": [
+      "p5"
+    ],
+    "jsx": "preserve",
+    "esModuleInterop": true,
+    "allowJs": true,
+    "lib": [
+      "es2017",
+      "es6",
+      "dom"
+    ],
+    "moduleResolution": "node",
+
+    // Other Outputs
+    //    "sourceMap": true,
+    //    "declaration": true,
+    //    "declarationMap": true,
+  }
+}
