@@ -1,6 +1,6 @@
 import p5 from 'p5';
 import { Button } from "../ui";
-import {loadSavedGame, removeSavedGame, startPassAndPlayGame} from '../app'
+import {loadSavedGame, removeSavedGame, startPassAndPlayGame, startPBEMGame} from '../app'
 // import { copyShareUrl } from "./networking";
 
 export class SetupScreen {
@@ -87,6 +87,10 @@ export class SetupScreen {
         if (this.startPassAndPlayButton.isHovered(p)) {
             this.showSetupScreen = false;
             startPassAndPlayGame(this.playerCount);
+        }
+        if (this.startPBEMButton.isHovered(p)) {
+            this.showSetupScreen = false;
+            startPBEMGame(this.playerCount);
         }
 
         // if (this.copyIdButton.isHovered(p)) copyShareUrl();

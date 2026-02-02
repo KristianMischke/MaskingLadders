@@ -193,6 +193,20 @@ export class GameRenderer {
             return;
         }
 
+        if (window.hideGame) {
+            p.background("#5c5a5a");
+            p.fill(255);
+            p.stroke(0);
+            p.strokeWeight(5);
+            p.textAlign(p.CENTER, p.CENTER);
+            p.textSize(50);
+            p.textStyle(p.BOLD);
+            p.text('Copied game to clipboard', p.width/2, p.height/2 + 50);;
+            let currentPlayer = this.game.players.find(p => p.id === this.game.currentPlayerId);
+            p.text('Please share link with: ' + currentPlayer.name, p.width/2, p.height/2 + 100);;
+            return;
+        }
+
         p.background("#5c5a5a");
 
         p.push();

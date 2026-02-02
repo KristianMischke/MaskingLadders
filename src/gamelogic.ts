@@ -1,6 +1,7 @@
 import seedrandom from 'seedrandom';
 
 const MAX_HAND_SIZE = 4;
+const MAX_PLAYS_PER_TURN = 3;
 const PLAYER_COLORS = [
     "#FF0077",
     "#00FFFF",
@@ -240,7 +241,14 @@ export interface GameAction {
     boardHeight: number | null;
     numPlayers: number | null;
     rngState: seedrandom.State.Arc4 | null;
+    gameType: GameType | null;
     redactType: RedactType | null;
+}
+
+export enum GameType {
+    PassAndPlay,
+    PBEM,
+    P2P
 }
 
 export class GameState {
@@ -253,9 +261,11 @@ export class GameState {
     pieces: BoardPiece[];
     leger: GameAction[];
     currentPlayerId: string;
+    gameType: GameType = GameType.PassAndPlay;
 
     submitActionCallback?: () => void;
-    constructor(seed?: string) {
+    onTurnChangeCallback?: () => void;
+    constructor(seed?: string, gameType = GameType.PassAndPlay) {
         this.rng = seedrandom(seed, {state: true});
         this.nextId = 0;
         this.players = [];
@@ -264,7 +274,9 @@ export class GameState {
         this.leger = [{
             action: GameActionType.InitGame,
             rngState: this.rng.state(),
+            gameType: gameType,
         } as GameAction];
+        this.gameType = gameType;
         this.currentPlayerId = '';
     }
 
@@ -306,6 +318,10 @@ export class GameState {
             .forEach(hand =>
                 hand.forEach(fixCardMaskedDataObjects)
             );
+    }
+
+    reconstructFromLeger(leger: GameAction[]) {
+        leger.forEach(gameAction => this.submitAction(gameAction));
     }
 
     private getNextId() {
@@ -362,12 +378,14 @@ export class GameState {
     }
 
     private generateDeck() {
-        // generate 10 cards for each card type
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 15; i++) {
             this.deck.push(generateCard(this.getNextId(), this.rng, CardAction.Move));
             this.deck.push(generateCard(this.getNextId(), this.rng, this.rng() < 0.5 ? CardAction.Grow : CardAction.Shrink));
             this.deck.push(generateCard(this.getNextId(), this.rng, this.rng() < 0.5 ? CardAction.Place : CardAction.Remove));
             // this.deck.push(generateCard(this.getNextId(), this.rng, this.rng() < 0.5 ? CardAction.Skip : CardAction.Draw));
+        }
+
+        for (let i = 0; i < 6; i++) {
             this.deck.push(generateCard(this.getNextId(), this.rng, CardAction.Draw));
         }
 
@@ -694,6 +712,8 @@ export class GameState {
         let currentPlayer = this.players.find(p => p.id === this.currentPlayerId)!;
         let hasPlayedCard = this.getPlayerActionsSinceEndTurn()
             .some(ga => ga.action === GameActionType.PlayCard);
+        // let numCardsPlayed = this.getPlayerActionsSinceEndTurn().filter(ga => ga.action === GameActionType.PlayCard).length;
+        // if (numCardsPlayed <= MAX_PLAYS_PER_TURN) {
         if (currentPlayer.hand.length > MAX_HAND_SIZE || !hasPlayedCard) {
             let lastGameAction = this.leger[this.leger.length - 1];
             return lastGameAction.action !== GameActionType.PlayCard;
@@ -749,6 +769,7 @@ export class GameState {
                     action: GameActionType.InitGame,
                     rngState: this.rng.state(),
                 } as GameAction];
+                this.gameType = gameAction.gameType;
                 this.currentPlayerId = '';
                 return;
             case GameActionType.CreatePlayers:
@@ -862,5 +883,6 @@ export class GameState {
 
         this.leger.push(gameAction);
         if (this.submitActionCallback) this.submitActionCallback();
+        if (gameAction.action === GameActionType.EndTurn && this.onTurnChangeCallback) this.onTurnChangeCallback();
     }
 }
