@@ -4,14 +4,15 @@ import {
     CardAction,
     GameAction,
     GameActionType,
-    GameState,
-    LongBoardPiece,
-    PieceType,
+    GameState, isLongBoardPiece,
+    LongBoardPiece, pieceTypeEquals,
     SelectPieceType
 } from "../gamelogic";
 import {PieceRenderer} from "./pieceRenderer";
 import {GameRenderer} from "./gameRenderer";
 
+const TILE_EVEN_COLOR = "#BBCCAA";
+const TILE_ODD_COLOR = "#AA8877";
 
 export class BoardRenderer {
     w: number;
@@ -64,7 +65,7 @@ export class BoardRenderer {
             } else {
                 pieceRenderer = new PieceRenderer(px, py, tileWidth);
                 pieceRenderer.piece = piece;
-                if (piece.type === PieceType.Ladder || piece.type === PieceType.Shoot) {
+                if (isLongBoardPiece(piece)) {
                     let longPiece = piece as LongBoardPiece;
                     let [px2, py2] = this.tileCenterToPixel(longPiece.x2, longPiece.y2);
                     pieceRenderer.x2 = px2;
@@ -90,18 +91,17 @@ export class BoardRenderer {
         let tileWidth = this.w / game.boardWidth;
         let tileHeight = this.h / game.boardHeight;
         let hoveredPiece: BoardPiece | undefined = undefined;
-        this.pieceRenderers.forEach(pr => {
-            if (pr.isHovered) {
-                hoveredPiece = pr.piece;
-            }
-        });
 
         let placeOrRemoveTiles: {x: number, y: number}[] = [];
         if (gameRenderer.revealedCard) {
             let revealedCard = gameRenderer.revealedCard;
+            this.pieceRenderers.forEach(pr => {
+                if (pr.isHovered && pieceTypeEquals(pr.piece.type, revealedCard.pieceType)) {
+                    hoveredPiece = pr.piece;
+                }
+            });
             placeOrRemoveTiles = game.getSelectedLocationsForPlaceOrRemove(
                 revealedCard.targetType as SelectPieceType,
-                revealedCard.placePieceType,
                 revealedCard.pieceType,
                 revealedCard.x,
                 revealedCard.dir,
@@ -116,16 +116,28 @@ export class BoardRenderer {
         for (let y = 0; y < game.boardHeight; y++) {
             p.push();
             for (let x = 0; x < game.boardWidth; x++) {
+                let tileColor = p.color("#F0F");
                 if (x === winningSquare.x && y === winningSquare.y) {
-                    let c = p.color("#FFFF00");
-                    c.setBlue(127 + p.sin(this.elapsedTimeSeconds/2)*127);
-                    p.fill(c);
+                    tileColor = p.color("#FFFF00");
+                    tileColor.setBlue(127 + p.sin(this.elapsedTimeSeconds/2)*127);
                 } else if (y % 2 === x % 2) {
-                    p.fill("#BBCCAA");
+                    tileColor = p.color(TILE_EVEN_COLOR);
                 } else {
-                    p.fill("#AA8877");
+                    tileColor = p.color(TILE_ODD_COLOR);
                 }
+                p.fill(tileColor);
                 p.rect(0, 0, tileWidth, tileHeight);
+
+                p.push();
+                p.textAlign(p.CENTER, p.CENTER);
+                p.textSize(30);
+                // p.textStyle(p.BOLD);
+                let fontColor = p.color("#444");
+                fontColor.setAlpha(100);
+                p.fill(fontColor);
+                p.noStroke();
+                p.text(game.getTileNumber(x, y).toString(), tileWidth/2, tileHeight/2);
+                p.pop();
 
                 if (placeOrRemoveTiles.find(t => t.x === x && t.y === y)) {
                     p.push();

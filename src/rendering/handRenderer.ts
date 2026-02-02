@@ -59,7 +59,11 @@ export class HandRenderer {
         if (isChoosingCard) {
             // add notification at screen center
             p.push();
-            p.translate(0, -cardHeight*2);
+            if (gameRenderer.redactingCard) {
+                p.translate(0, -cardHeight*3.5);
+            } else {
+                p.translate(0, -cardHeight*2);
+            }
             p.background(255, 255, 255, 200); // haze
             p.fill("#999");
             p.stroke("#333");
@@ -121,7 +125,11 @@ export class HandRenderer {
         p.pop();
 
         p.push();
-        p.translate(p.width - cardWidth - 10, p.height/2);
+        if (gameRenderer.redactingCard) {
+            p.translate(p.width/2, p.height/2);
+        } else {
+            p.translate(p.width - cardWidth - 10, p.height/2);
+        }
         p.scale(1.5);
         this.revealedCardRenderer.card = gameRenderer.redactingCard;
         this.revealedCardRenderer.revealedCard = gameRenderer.revealedCard;

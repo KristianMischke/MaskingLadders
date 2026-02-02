@@ -32,6 +32,19 @@ export enum PieceType {
     Coin = 'coin',
     Anything = 'things'
 }
+const ALL_REAL_PIECE_TYPES = [
+    PieceType.Pawn,
+    PieceType.Ladder,
+    PieceType.Shoot,
+    PieceType.Bomb,
+    PieceType.Coin,
+];
+export function pieceTypeEquals(a: PieceType, b: PieceType) {
+    return a === b || a === PieceType.Anything || b === PieceType.Anything;
+}
+export function isLongBoardPiece(piece: BoardPiece) {
+    return piece.type === PieceType.Shoot || piece.type === PieceType.Ladder;
+}
 
 export enum SelectPieceType {
     // Note: All & Target require a pieceType
@@ -53,12 +66,15 @@ export enum SelectObjectType {
 
 export enum CardAction {
     Move = 'move',
+
     Grow = 'grow',
     Shrink = 'shrink',
+
     Remove = 'remove',
     Place = 'place',
+    Swap = 'swap',
+
     Draw = 'draw',
-    Skip = 'skip'
 }
 
 export enum MaskType {
@@ -143,7 +159,7 @@ export interface Card {
     id: string;
     action: MaskedData<CardAction>;
     actionTarget?: ActionTarget;
-    placePieceType?: MaskedData<PieceType>;
+    operatePieceType?: MaskedData<PieceType>;
     x?: MaskedData<number>;
     dir?: MaskedData<Direction>;
 }
@@ -190,24 +206,33 @@ function generateCard(id: string, rng: seedrandom.PRNG, action: CardAction) {
     let options = [1, 2, 3];
     let x = new MaskedData({options, index: Math.floor(rng() * options.length)});
     let dir = new MaskedData({options: Object.values(Direction), index: Math.floor(rng() * Object.values(Direction).length)});
-    let placePieceType = undefined;
+    let operatePieceType = undefined;
 
-    if (action === CardAction.Place || action === CardAction.Remove) {
-        placePieceType = new MaskedData({options: Object.values(PieceType), index: Math.floor(rng() * Object.values(PieceType).length)});
+    if (action === CardAction.Place || action == CardAction.Swap) {
+        operatePieceType = new MaskedData({options: ALL_REAL_PIECE_TYPES, index: Math.floor(rng() * ALL_REAL_PIECE_TYPES.length)});
+    }
+    if (action === CardAction.Swap) {
+        x = undefined;
+        dir = undefined;
+    }
+    if (action === CardAction.Remove) {
+        operatePieceType = new MaskedData({options: Object.values(PieceType), index: Math.floor(rng() * Object.values(PieceType).length)});
     }
     if (action === CardAction.Grow || action === CardAction.Shrink) {
         actionTarget = new ActionTarget(
-            new MaskedData({options: [SelectPieceType.Target], index: 0}),
+            new MaskedData({options: [SelectPieceType.Target, SelectPieceType.All], index: Math.floor(rng() * 2)}),
             new MaskedData({options: [PieceType.Ladder, PieceType.Shoot], index: Math.floor(rng() * 2)})
         );
         x = undefined;
         dir = undefined;
     }
-    if (action === CardAction.Draw || action === CardAction.Skip) {
+    if (action === CardAction.Draw) {
+        options = [2, 3, 4];
+        x = new MaskedData({options, index: Math.floor(rng() * options.length)});
         actionTarget = undefined;
         dir = undefined;
     }
-    return {id, action: maskedAction, actionTarget, x, dir, placePieceType} as Card;
+    return {id, action: maskedAction, actionTarget, x, dir, operatePieceType} as Card;
 }
 
 export enum GameActionType {
@@ -310,7 +335,7 @@ export class GameState {
             }
             if (card.x) card.x = new MaskedData<number>(card.x);
             if (card.dir) card.dir = new MaskedData<Direction>(card.dir);
-            if (card.placePieceType) card.placePieceType = new MaskedData<PieceType>(card.placePieceType);
+            if (card.operatePieceType) card.operatePieceType = new MaskedData<PieceType>(card.operatePieceType);
         }
         this.deck.forEach(fixCardMaskedDataObjects);
         this.players
@@ -360,12 +385,12 @@ export class GameState {
                 let y2 = Math.max(y - Math.ceil(this.rng() * 3), 0);
                 this.pieces.push({id: this.getNextId(), type: PieceType.Shoot, x, y, x2, y2} as LongBoardPiece);
             }
-            if (y > 0 && this.rng() < 0.3) {
+            if (y > 0 && this.rng() < 0.5) {
                 // place a coin randomly on this row
                 let x = Math.floor(this.rng() * width);
                 this.pieces.push({id: this.getNextId(), type: PieceType.Coin, x, y} as BoardPiece);
             }
-            if (y > 0 && this.rng() < 0.15) {
+            if (y > 0 && this.rng() < 0.5) {
                 // place a bomb randomly on this row
                 let x = Math.floor(this.rng() * width);
                 this.pieces.push({id: this.getNextId(), type: PieceType.Bomb, x, y} as BoardPiece);
@@ -378,20 +403,25 @@ export class GameState {
     }
 
     private generateDeck() {
-        for (let i = 0; i < 15; i++) {
-            this.deck.push(generateCard(this.getNextId(), this.rng, CardAction.Move));
-            this.deck.push(generateCard(this.getNextId(), this.rng, this.rng() < 0.5 ? CardAction.Grow : CardAction.Shrink));
-            this.deck.push(generateCard(this.getNextId(), this.rng, this.rng() < 0.5 ? CardAction.Place : CardAction.Remove));
-            // this.deck.push(generateCard(this.getNextId(), this.rng, this.rng() < 0.5 ? CardAction.Skip : CardAction.Draw));
-        }
-
-        for (let i = 0; i < 6; i++) {
-            this.deck.push(generateCard(this.getNextId(), this.rng, CardAction.Draw));
-        }
-
-        // create mask cards (face cards)
-        for (let i = 0; i < 4; i++) {
-            // TODO
+        let cardPercents = [
+            {action: CardAction.Move, percent: 0.25},
+            {action: CardAction.Grow, percent: 0.05},
+            {action: CardAction.Shrink, percent: 0.05},
+            {action: CardAction.Place, percent: 0.25},
+            {action: CardAction.Remove, percent: 0.10},
+            {action: CardAction.Swap, percent: 0.20},
+            {action: CardAction.Draw, percent: 0.10},
+        ];
+        for (let i = 0; i < 100; i++) {
+            let r = this.rng();
+            for (let {action, percent} of cardPercents) {
+                if (r < percent) {
+                    this.deck.push(generateCard(this.getNextId(), this.rng, action));
+                    break;
+                } else {
+                    r -= percent;
+                }
+            }
         }
     }
 
@@ -413,6 +443,12 @@ export class GameState {
         let xForward = lastRowY % 2 === 0;
         let lastRowX = xForward ? this.boardWidth - 1 : 0;
         return {x: lastRowX, y: lastRowY};
+    }
+
+    getTileNumber(x: number, y: number) {
+        let xForward = y % 2 === 0;
+        let prevRows = y * this.boardWidth;
+        return 1 + prevRows + (xForward ? x : this.boardWidth-1-x);
     }
 
     private movePos(x: number, y: number, dir: Direction) {
@@ -441,39 +477,58 @@ export class GameState {
         return [x, y];
     }
 
-    private landPiece(piece: BoardPiece) {
-        // check for shoots, ladders, coins, and bombs
-        if (piece.type === PieceType.Ladder) return;
-        if (piece.type === PieceType.Shoot) return;
+    tryGetPieceByTypeAtPos(pieceType: PieceType, x: number, y: number) {
+        return this.pieces.find(p => pieceTypeEquals(p.type, pieceType) && p.x === x && p.y === y);
+    }
 
-        let shootAtLocation = this.pieces.find(p => p.type === PieceType.Shoot && p.x === piece.x && p.y === piece.y) as LongBoardPiece;
+    private landPiece(piece: BoardPiece, depth = 0) {
+        if (isLongBoardPiece(piece)) return; // shoots and ladders don't land
+        if (depth > 10) return; // don't allow infinite recurse
+
+        let shootAtLocation = this.tryGetPieceByTypeAtPos(PieceType.Shoot, piece.x, piece.y) as LongBoardPiece;
         if (shootAtLocation) {
             piece.x = shootAtLocation.x2;
             piece.y = shootAtLocation.y2;
+            this.landPiece(piece, depth+1);
             return;
         }
 
-        let ladderAtLocation = this.pieces.find(p => p.type === PieceType.Ladder && p.x === piece.x && p.y === piece.y) as LongBoardPiece;
+        let ladderAtLocation = this.tryGetPieceByTypeAtPos(PieceType.Ladder, piece.x, piece.y) as LongBoardPiece;
         if (ladderAtLocation) {
             piece.x = ladderAtLocation.x2;
             piece.y = ladderAtLocation.y2;
+            this.landPiece(piece, depth+1);
             return;
         }
 
         if (piece.type === PieceType.Pawn) {
-            let coinAtLocation = this.pieces.find(p => p.type === PieceType.Coin && p.x === piece.x && p.y === piece.y);
+            let coinAtLocation = this.tryGetPieceByTypeAtPos(PieceType.Coin, piece.x, piece.y);
             if (coinAtLocation) {
                 this.pieces.splice(this.pieces.indexOf(coinAtLocation), 1);
                 this.players.find(p => p.id === piece.playerId)!.score += 25;
             }
-            let bombAtLocation = this.pieces.find(p => p.type === PieceType.Bomb && p.x === piece.x && p.y === piece.y);
+
+            let bombAtLocation = this.tryGetPieceByTypeAtPos(PieceType.Bomb, piece.x, piece.y);
             if (bombAtLocation) {
                 this.pieces.splice(this.pieces.indexOf(bombAtLocation), 1);
                 this.players.find(p => p.id === piece.playerId)!.score -= 30;
-                // delete non-pawn pieces in 3x3
+                // delete non-pawn neighbors pieces in 3x3
                 let neighbors = this.pieces.filter(p => Math.abs(p.x - piece.x) <= 1 && Math.abs(p.y - piece.y) <= 1 && p.type !== PieceType.Pawn);
                 neighbors.forEach(p => this.pieces.splice(this.pieces.indexOf(p), 1));
+
+                // move neighboring pawns backwards 3
+                let pawnNeighbors = this.pieces.filter(p => Math.abs(p.x - piece.x) <= 1 && Math.abs(p.y - piece.y) <= 1 && p.type === PieceType.Pawn);
+                pawnNeighbors.forEach(p => {
+                    for (let i = 0; i < 3; i++) {
+                        let [newX, newY] = this.movePos(p.x, p.y, Direction.Bck);
+                        p.x = newX;
+                        p.y = newY;
+                    }
+                    this.landPiece(p);
+                })
+                return;
             }
+
             let winningSquare = this.winningSquare();
             if (piece.x === winningSquare.x && piece.y === winningSquare.y) {
                 this.players.find(p => p.id === piece.playerId)!.score += 100;
@@ -491,13 +546,13 @@ export class GameState {
         let selectedPieces = []
         switch (targetType) {
             case SelectPieceType.All:
-                selectedPieces = this.pieces.filter(p => p.type === targetPieceType! || targetPieceType === PieceType.Anything);
+                selectedPieces = this.pieces.filter(p => pieceTypeEquals(p.type, targetPieceType!));
                 break;
             case SelectPieceType.Target:
-                selectedPieces.push(this.pieces.find(p => p.id === targetPieceId)!);
+                selectedPieces = this.pieces.filter(p => p.id === targetPieceId);
                 break;
             case SelectPieceType.Self:
-                selectedPieces.push(this.pieces.find(p => p.playerId === this.currentPlayerId)!);
+                selectedPieces = this.pieces.filter(p => p.playerId === this.currentPlayerId);
                 break;
             case SelectPieceType.Other:
                 selectedPieces = this.pieces.filter(p => p.playerId && p.playerId !== this.currentPlayerId);
@@ -519,26 +574,26 @@ export class GameState {
         selectedPieces.forEach(p => this.landPiece(p));
     }
 
-    private executeGrowShrink(isGrow: boolean, targetPieceId: string | null) {
+    private executeGrowShrink(isGrow: boolean, selectPieceType: SelectPieceType, targetPieceId: string | null) {
         this.pieces.forEach(p => {
-            if (p.id === targetPieceId) {
+            if (p.id === targetPieceId || selectPieceType === SelectPieceType.All) {
                 let longPiece = p as LongBoardPiece;
                 if (p.type === PieceType.Ladder) {
-                    longPiece.y2 = longPiece.y2 + (isGrow ? 1 : -1);
+                    longPiece.y2 = Math.min(this.boardHeight-1, longPiece.y2 + (isGrow ? 1 : -1));
                 }
                 if (p.type === PieceType.Shoot) {
-                    longPiece.y2 = longPiece.y2 + (isGrow ? -1 : 1);
+                    longPiece.y2 = Math.max(0, longPiece.y2 + (isGrow ? -1 : 1));
                 }
             }
         });
     }
 
-    private getSelectedPiecesForPlaceOrRemove(selectType: SelectPieceType, placePieceType: PieceType, pieceType: PieceType, x: number, dir: Direction, targetPieceId: string | null) {
+    private getSelectedPiecesForOperation(selectType: SelectPieceType, pieceType: PieceType, targetPieceId: string | null) {
         let selectedPieces: BoardPiece[] = [];
         this.pieces.forEach(p => {
             if (selectType == SelectPieceType.Target && p.type === pieceType && p.id === targetPieceId) {
                 selectedPieces.push(p);
-            } else if (selectType == SelectPieceType.All && (p.type === pieceType || pieceType === PieceType.Anything)) {
+            } else if (selectType == SelectPieceType.All && pieceTypeEquals(p.type, pieceType)) {
                 selectedPieces.push(p);
             } else if (selectType == SelectPieceType.Self && p.playerId === this.currentPlayerId) {
                 selectedPieces.push(p);
@@ -549,8 +604,8 @@ export class GameState {
         return selectedPieces;
     }
 
-    getSelectedLocationsForPlaceOrRemove(selectType: SelectPieceType, placePieceType: PieceType, pieceType: PieceType, x: number, dir: Direction, targetPieceId: string | null) {
-        let selectedPieces = this.getSelectedPiecesForPlaceOrRemove(selectType, placePieceType, pieceType, x, dir, targetPieceId);
+    getSelectedLocationsForPlaceOrRemove(selectType: SelectPieceType, pieceType: PieceType, x: number, dir: Direction, targetPieceId: string | null) {
+        let selectedPieces = this.getSelectedPiecesForOperation(selectType, pieceType, targetPieceId);
         let allLocations: {x: number, y: number}[] = [];
         selectedPieces.forEach(p => {
             let [tx, ty] = [p.x, p.y];
@@ -563,17 +618,37 @@ export class GameState {
     }
 
     private executeRemove(selectType: SelectPieceType, removePieceType: PieceType, pieceType: PieceType, x: number, dir: Direction, targetPieceId: string | null) {
-        this.getSelectedLocationsForPlaceOrRemove(selectType, removePieceType, pieceType, x, dir, targetPieceId)
+        this.getSelectedLocationsForPlaceOrRemove(selectType, pieceType, x, dir, targetPieceId)
             .forEach(({x, y}) => {
                 let piece = this.pieces.find(p => p.x === x && p.y === y);
-                if (piece && piece.type === removePieceType) {
+                if (piece && pieceTypeEquals(piece.type, removePieceType)) {
                     this.pieces.splice(this.pieces.indexOf(piece), 1);
                 }
             });
     }
 
+    private executeSwap(selectType: SelectPieceType, placePieceType: PieceType, pieceType: PieceType, targetPieceId: string | null) {
+        this.getSelectedPiecesForOperation(selectType, pieceType, targetPieceId)
+            .forEach(p => {
+                p.type = placePieceType;
+
+                if (isLongBoardPiece(p)) {
+                    let longPiece = p as LongBoardPiece;
+                    longPiece.x2 = longPiece.x;
+                    longPiece.y2 = placePieceType === PieceType.Ladder ? longPiece.y+1 : longPiece.y-1;
+                    longPiece.y2 = Math.min(this.boardHeight-1, Math.max(0, longPiece.y2));
+                }
+
+                if (placePieceType === PieceType.Pawn) {
+                    p.playerId = this.currentPlayerId;
+                } else {
+                    p.playerId = null;
+                }
+            });
+    }
+
     private executePlace(selectType: SelectPieceType, placePieceType: PieceType, pieceType: PieceType, x: number, dir: Direction, targetPieceId: string | null) {
-        this.getSelectedLocationsForPlaceOrRemove(selectType, placePieceType, pieceType, x, dir, targetPieceId)
+        this.getSelectedLocationsForPlaceOrRemove(selectType, pieceType, x, dir, targetPieceId)
             .forEach(({x, y}) => {
                 if (placePieceType === PieceType.Ladder) {
                     let x2 = Math.max(Math.min(x + Math.floor(this.rng() * 5) - 2, this.boardWidth - 1), 0);
@@ -583,6 +658,9 @@ export class GameState {
                     let x2 = Math.max(Math.min(x + Math.floor(this.rng() * 5) - 2, this.boardWidth - 1), 0);
                     let y2 = Math.max(y - Math.ceil(this.rng() * 3), 0);
                     this.pieces.push({id: this.getNextId(), type: placePieceType, x, y, x2, y2} as LongBoardPiece);
+                } else if (placePieceType === PieceType.Pawn) {
+                    this.pieces.push({id: this.getNextId(), type: placePieceType, x, y, playerId: this.currentPlayerId} as BoardPiece);
+                    this.landPiece(this.pieces[this.pieces.length - 1]);
                 } else {
                     this.pieces.push({id: this.getNextId(), type: placePieceType, x, y} as BoardPiece);
                 }
@@ -601,10 +679,10 @@ export class GameState {
                 );
                 break;
             case CardAction.Grow:
-                this.executeGrowShrink(true, gameAction.targetPieceId);
+                this.executeGrowShrink(true, revealedCard.targetType as SelectPieceType, gameAction.targetPieceId);
                 break;
             case CardAction.Shrink:
-                this.executeGrowShrink(false, gameAction.targetPieceId);
+                this.executeGrowShrink(false, revealedCard.targetType as SelectPieceType, gameAction.targetPieceId);
                 break;
             case CardAction.Remove:
                 this.executeRemove(
@@ -626,7 +704,13 @@ export class GameState {
                     gameAction.targetPieceId
                 )
                 break;
-            case CardAction.Skip:
+            case CardAction.Swap:
+                this.executeSwap(
+                    revealedCard.targetType as SelectPieceType,
+                    revealedCard.placePieceType,
+                    revealedCard.pieceType,
+                    gameAction.targetPieceId
+                )
                 break;
             case CardAction.Draw:
                 for (let i = 0; i < revealedCard.x; i++) {
@@ -647,7 +731,7 @@ export class GameState {
                 chosenCard.actionTarget.targetType.isMasked = true;
                 break;
             case RedactType.PlacePieceType:
-                chosenCard.placePieceType.isMasked = true;
+                chosenCard.operatePieceType.isMasked = true;
                 break;
             case RedactType.PieceType:
                 chosenCard.actionTarget.pieceType.isMasked = true;
@@ -857,7 +941,7 @@ export class GameState {
                     action: card.action.revealData(this.rng),
                     targetType: revealedTargetType,
                     pieceType: revealedPieceType,
-                    placePieceType: card.placePieceType?.revealData(this.rng),
+                    placePieceType: card.operatePieceType?.revealData(this.rng),
                     x: card.x?.revealData(this.rng),
                     dir: card.dir?.revealData(this.rng),
                 } as RevealedCard;

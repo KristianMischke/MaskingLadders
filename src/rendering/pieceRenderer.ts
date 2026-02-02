@@ -1,5 +1,13 @@
 import p5 from "p5";
-import {BoardPiece, Card, LongBoardPiece, PieceType, RevealedCard, SelectPieceType} from "../gamelogic";
+import {
+    BoardPiece,
+    Card,
+    isLongBoardPiece,
+    LongBoardPiece,
+    PieceType,
+    RevealedCard,
+    SelectPieceType
+} from "../gamelogic";
 import {BoardRenderer} from "./boardRenderer";
 
 enum HighlightType {
@@ -56,6 +64,8 @@ export class PieceRenderer {
         let px2 = this.x2;
         let py2 = this.y2;
 
+        let tileNum = boardRenderer.game.getTileNumber(this.piece.x, this.piece.y);
+
         let isHighlighted = false;
         let highlightType = HighlightType.None;
         if (revealedCard || hoveredCard) {
@@ -86,6 +96,15 @@ export class PieceRenderer {
         let mouse = p.screenToWorld(p.mouseX, p.mouseY);
         this.isHovered = mouse.x > px - this.w/2 && mouse.x < px + this.w/2 && mouse.y > py - this.w/2 && mouse.y < py + this.w/2;
 
+        // if multiple pieces on same square, need to shift them so all are visible
+        let pieceIdsOnSquare = game.pieces.filter(p => p.x === piece.x && p.y === piece.y && !isLongBoardPiece(p)).map(p => p.id);
+        if (pieceIdsOnSquare.length > 1) {
+            let playerIndex = pieceIdsOnSquare.indexOf(piece.id);
+            let allOffset = this.w / 2 * (pieceIdsOnSquare.length - 1) / pieceIdsOnSquare.length;
+            let offset = this.w / 2 * playerIndex / pieceIdsOnSquare.length;
+            p.translate(offset - allOffset/2, offset);
+        }
+
         if (isHighlighted) {
             p.noFill();
             switch (highlightType) {
@@ -112,7 +131,7 @@ export class PieceRenderer {
             p.strokeWeight(3)
             p.stroke(COIN_OUTLINE);
             p.fill(COIN_COLOR);
-            let coinAnim = p.sin(this.elapsedTimeSeconds);
+            let coinAnim = p.sin(this.elapsedTimeSeconds + tileNum * 0.1);
             p.ellipse(px, py, this.w / 2 * coinAnim, this.w / 2);
         }
         if(piece.type === PieceType.Bomb) {
@@ -169,21 +188,13 @@ export class PieceRenderer {
             let headDiameter = this.w / 4;
             let bodyDiameter = this.w / 2;
             let color = game.players.find(p => p.id === piece.playerId)!.color;
-            // if multiple pieces on same square, need to shift them so all are visible
-            let numberOfPiecesOnSquare = game.pieces.filter(p => p.x === piece.x && p.y === piece.y).length;
             p.fill(color);
             p.noStroke();
-            if (numberOfPiecesOnSquare > 1) {
-                let playerIndex = game.players.findIndex(p => p.id === piece.playerId);
-                let allOffset = this.w / 2 * (numberOfPiecesOnSquare - 1) / numberOfPiecesOnSquare;
-                let offset = this.w / 2 * playerIndex / numberOfPiecesOnSquare;
-                p.circle(px + offset - allOffset/2, py - headDiameter + offset, headDiameter);
-                p.arc(px + offset - allOffset/2, py + offset, bodyDiameter, bodyDiameter, p.PI, 0);
-            } else {
+            if (pieceIdsOnSquare.length === 1) {
                 p.translate(0, this.w / 4);
-                p.circle(px, py - headDiameter, headDiameter);
-                p.arc(px, py, bodyDiameter, bodyDiameter, p.PI, 0);
             }
+            p.circle(px, py - headDiameter, headDiameter);
+            p.arc(px, py, bodyDiameter, bodyDiameter, p.PI, 0);
         }
     }
 }

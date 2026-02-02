@@ -18,9 +18,9 @@ const CARD_COLORS = new Map<CardAction, string>([
 
     [CardAction.Remove, "#FF4466"],
     [CardAction.Place, "#FF4466"],
+    [CardAction.Swap, "#FF4466"],
 
     [CardAction.Draw, "#AA9966"],
-    [CardAction.Skip, "#AA9966"],
 ]);
 
 function getMysteryText() {
@@ -113,7 +113,7 @@ export class CardRenderer {
             action = this.card.action.getKnownData();
             actionTargetType = this.card.actionTarget?.targetType.getKnownData();
             actionPieceType = this.card.actionTarget?.pieceType.getKnownData();
-            placePieceType = this.card.placePieceType?.getKnownData();
+            placePieceType = this.card.operatePieceType?.getKnownData();
             x = this.card.x?.getKnownData();
             dir = this.card.dir?.getKnownData();
         }

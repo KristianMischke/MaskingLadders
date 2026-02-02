@@ -27,7 +27,7 @@ export class SetupScreen {
         this.newGameButton = new Button(p.windowWidth/2-120, 300, 240, 30, "New Game");
 
         this.startPassAndPlayButton = new Button(p.windowWidth/2-120, 200, 240, 30, "Start Pass & Play");
-        this.startPBEMButton = new Button(p.windowWidth/2-120, 250, 240, 30, "Start PBEM");
+        this.startPBEMButton = new Button(p.windowWidth/2-120, 250, 240, 30, "Start Play By Email (PBEM)");
         this.startP2PButton = new Button(p.windowWidth/2-120, 300, 240, 30, "Start P2P");
 
         this.copyIdButton = new Button(p.windowWidth/2-60, 30, 120, 30, "Copy Share URL");

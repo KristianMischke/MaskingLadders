@@ -11,6 +11,7 @@ function drawScoreboard(p: p5, game: GameState, elapsedTimeSeconds: number = 0) 
     p.push();
     p.translate(p.width - SCOREBOARD_WIDTH, 10);
     for (let player of game.players) {
+        let playerIndex = game.players.indexOf(player);
         p.strokeWeight(2);
         p.fill(255);
         p.stroke(player.color);
@@ -66,7 +67,7 @@ function drawScoreboard(p: p5, game: GameState, elapsedTimeSeconds: number = 0) 
             p.fill(COIN_COLOR);
             p.stroke(COIN_OUTLINE);
             p.strokeWeight(2);
-            p.ellipse(0, 0, 25 * p.sin(elapsedTimeSeconds), 25);
+            p.ellipse(0, 0, 25 * p.sin(elapsedTimeSeconds + playerIndex*0.5), 25);
 
             p.fill(0);
             p.noStroke();
