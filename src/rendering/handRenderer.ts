@@ -180,7 +180,7 @@ export class HandRenderer {
                 } as GameAction)
                 return true;
             }
-            if (cardRenderer.isHovered && game.shouldCurrentPlayerRedactCard()) {
+            if (cardRenderer.isHovered && game.shouldCurrentPlayerRedactCard() && game.isCardRedactable(cardRenderer.card)) {
                 gameRenderer.redactingCard = cardRenderer.card;
                 return true;
             }

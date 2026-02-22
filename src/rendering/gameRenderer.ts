@@ -155,8 +155,7 @@ export class GameRenderer {
             this.revealedCard = lastLeger.revealedCard;
             this.revealedCardTimeSeconds += p.deltaTime / 1000;
 
-            let cardRequiresTarget = this.revealedCard.targetType !== SelectPieceType.Target;
-            if (cardRequiresTarget && this.revealedCardTimeSeconds > 0.5) {
+            if (!game.anyValidTargetsForCard(this.revealedCard) && this.revealedCardTimeSeconds > 0.5) {
                 game.submitAction({
                     playerId: game.currentPlayerId,
                     action: GameActionType.CardAction,
@@ -190,6 +189,7 @@ export class GameRenderer {
             p.text("The Winner is: " + winner.name, p.width/2, p.height/2);
             p.pop();
 
+            // show mini board too ?
             drawScoreboard(p, this.game, this.elapsedTimeSeconds);
             return;
         }

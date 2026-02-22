@@ -82,7 +82,7 @@ export class PieceRenderer {
                     isHighlighted = this.piece!.playerId === game.currentPlayerId;
                     highlightType = HighlightType.Selected;
                     break;
-                case SelectPieceType.Other:
+                case SelectPieceType.Opponent:
                     isHighlighted = this.piece.playerId && this.piece!.playerId !== game.currentPlayerId;
                     highlightType = HighlightType.Selected;
                     break;

@@ -51,14 +51,14 @@ export enum SelectPieceType {
     All = 'all',
     Target = 'target',
     Self = 'self',
-    Other = 'other'
+    Opponent = 'opponent'
 }
 
 export enum SelectObjectType {
     All = 'all',
     Target = 'target',
     Self = 'self',
-    Other = 'other',
+    Opponent = 'opponent',
 
     Card = 'card',
     Tile = 'tile'
@@ -554,7 +554,7 @@ export class GameState {
             case SelectPieceType.Self:
                 selectedPieces = this.pieces.filter(p => p.playerId === this.currentPlayerId);
                 break;
-            case SelectPieceType.Other:
+            case SelectPieceType.Opponent:
                 selectedPieces = this.pieces.filter(p => p.playerId && p.playerId !== this.currentPlayerId);
                 break;
         }
@@ -597,7 +597,7 @@ export class GameState {
                 selectedPieces.push(p);
             } else if (selectType == SelectPieceType.Self && p.playerId === this.currentPlayerId) {
                 selectedPieces.push(p);
-            } else if (selectType == SelectPieceType.Other && p.playerId && p.playerId !== this.currentPlayerId) {
+            } else if (selectType == SelectPieceType.Opponent && p.playerId && p.playerId !== this.currentPlayerId) {
                 selectedPieces.push(p);
             }
         });
@@ -767,6 +767,12 @@ export class GameState {
         let nextPlayerIndex = (playerIndex + 1) % this.players.length;
         let nextPlayer = this.players[nextPlayerIndex];
         this.currentPlayerId = nextPlayer.id;
+
+        // if new current player has no pawn, respawn at start
+        let currentPlayerPawnCount = this.pieces.filter(p => p.playerId === this.currentPlayerId).length;
+        if (currentPlayerPawnCount === 0) {
+            this.pieces.push({id: this.getNextId(), type: PieceType.Pawn, x: 0, y: 0, playerId: this.currentPlayerId});
+        }
     }
 
     private getPlayerActionsSinceEndTurn() {
@@ -781,6 +787,7 @@ export class GameState {
     }
 
     canCurrentPlayerDrawCard() {
+        if (this.deck.length === 0) return false;
         let currentPlayer = this.players.find(p => p.id === this.currentPlayerId)!;
         if (currentPlayer.hand.length < MAX_HAND_SIZE) return true;
         return !this.getPlayerActionsSinceEndTurn()
@@ -811,6 +818,24 @@ export class GameState {
         // return !this.canCurrentPlayerPlayCard()
         //     && !this.getPlayerActionsSinceEndTurn()
         //         .some(ga => ga.action === GameActionType.CardAction);
+    }
+
+    anyValidTargetsForCard(revealedCard: RevealedCard) {
+        return (
+            revealedCard.targetType === SelectPieceType.Target
+            && this.pieces.some(p => pieceTypeEquals(p.type, revealedCard.pieceType))
+        );
+    }
+
+    isCardRedactable(card: Card) {
+        return [
+            card.action.getKnownData(),
+            card.actionTarget?.targetType.getKnownData(),
+            card.actionTarget?.pieceType.getKnownData(),
+            card.operatePieceType?.getKnownData(),
+            card.dir?.getKnownData(),
+            card.x?.getKnownData(),
+        ].some(x => x !== MaskOrMystery.Mystery && x !== MaskOrMystery.Mystery);
     }
 
     shouldCurrentPlayerRedactCard() {
@@ -929,6 +954,8 @@ export class GameState {
         let player = this.players.find(p => p.id === gameAction.playerId)!;
         let card = player.hand.find(c => c.id === gameAction.cardId)!;
 
+        let targetPiece = this.pieces.find(p => p.id === gameAction.targetPieceId);
+
         switch (gameAction.action) {
             case GameActionType.MovePawn:
                 gameAction.dieRollResult = Math.floor(this.rng() * 6) + 1;
@@ -949,6 +976,9 @@ export class GameState {
                 break;
             case GameActionType.CardAction:
                 let revealedCard = this.leger.find(ga => ga.action === GameActionType.PlayCard && ga.cardId === gameAction.cardId)!.revealedCard!;
+                if (revealedCard.targetType === SelectPieceType.Target && targetPiece && !pieceTypeEquals(targetPiece.type, revealedCard.pieceType)) {
+                    throw new Error("Invalid piece type for card")
+                }
                 this.executeCardAction(gameAction, revealedCard);
                 break;
             case GameActionType.RedactCard:
